@@ -1,5 +1,5 @@
 import polyline from '@mapbox/polyline';
-import { Coordinate, Place, PlaceDetails, RoutePlan, TravelMode } from './types';
+import { Coordinate, Place, PlaceDetails, PlaceSuggestion, RoutePlan, TravelMode } from './types';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://t5jalxqqsb.execute-api.eu-west-2.amazonaws.com';
 const MAPS_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
@@ -28,9 +28,24 @@ function plotPoints(start: Coordinate, end: Coordinate, count: number) {
   });
 }
 
-export async function getPlaceDetails(placeId: string) {
-  const result = await post<{ data: PlaceDetails }>('/get-details', { place_id: placeId });
-  return result.data;
+export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
+  const response = await post<{ data: { result?: PlaceDetails } | PlaceDetails }>('/get-details', { place_id: placeId });
+  const payload = response.data as PlaceDetails & { result?: PlaceDetails };
+  return payload.result ?? payload;
+}
+
+export async function getPlaceSuggestions(input: string): Promise<PlaceSuggestion[]> {
+  if (!MAPS_KEY || input.trim().length < 3) return [];
+  const query = new URLSearchParams({ input: input.trim(), key: MAPS_KEY, components: 'country:gb' });
+  const response = await fetch(`https://maps.googleapis.com/maps/api/place/autocomplete/json?${query}`);
+  const data = await response.json();
+  if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') return [];
+  return (data.predictions ?? []).map((item: any) => ({ place_id: item.place_id, description: item.description, main_text: item.structured_formatting?.main_text ?? item.description, secondary_text: item.structured_formatting?.secondary_text ?? '' }));
+}
+
+export function getPlacePhotoUrl(details: PlaceDetails | null, width = 900) {
+  const reference = details?.photos?.[0]?.photo_reference;
+  return reference && MAPS_KEY ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${width}&photo_reference=${encodeURIComponent(reference)}&key=${MAPS_KEY}` : undefined;
 }
 
 export async function planRoute(startText: string, finishText: string, pubCount: number, attractionCount: number, mode: TravelMode): Promise<RoutePlan> {

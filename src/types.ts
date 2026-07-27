@@ -21,7 +21,11 @@ export type PlaceDetails = {
   user_ratings_total?: number;
   website?: string;
   opening_hours?: { open_now?: boolean; weekday_text?: string[] };
+  photos?: { photo_reference: string }[];
+  vicinity?: string;
 };
+
+export type PlaceSuggestion = { place_id: string; description: string; main_text: string; secondary_text: string };
 
 export type RoutePlan = {
   origin: Coordinate;
