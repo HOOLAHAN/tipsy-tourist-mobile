@@ -2,6 +2,8 @@
 
 The native iOS and Android companion to Tipsy Tourist, built with React Native and Expo.
 
+The project targets Expo SDK 54 so it runs in the current App Store and Play Store versions of Expo Go.
+
 ## Features
 
 - Plan a route between an address, postcode, or coordinate pair
