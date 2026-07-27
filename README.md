@@ -12,7 +12,7 @@ The project targets Expo SDK 54 so it runs in the current App Store and Play Sto
 - Use the device location as the route start
 - View venue details and open phone numbers or websites
 - View and reorder the itinerary
-- Switch between classic, dark, and neon themes
+- Switch between polished light and dark themes
 
 ## Setup
 
