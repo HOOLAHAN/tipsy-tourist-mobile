@@ -16,8 +16,9 @@ export async function geocode(address: string): Promise<Coordinate> {
 }
 
 async function nearby(path: '/places' | '/attractions', point: Coordinate, type: Place['stopType']): Promise<Place | undefined> {
-  const result = await post<{ data: Omit<Place, 'stopType'>[] }>(path, { lat: point.latitude, lng: point.longitude });
-  const place = result.data?.[0];
+  const response = await post<{ data: { results?: Omit<Place, 'stopType'>[] } | Omit<Place, 'stopType'>[] }>(path, { lat: point.latitude, lng: point.longitude });
+  const places = Array.isArray(response.data) ? response.data : response.data?.results;
+  const place = places?.[0];
   return place ? { ...place, stopType: type } : undefined;
 }
 
@@ -54,6 +55,7 @@ export async function planRoute(startText: string, finishText: string, pubCount:
   const pubs = await Promise.all(plotPoints(origin, destination, pubCount).map((point) => nearby('/places', point, 'pub')));
   const attractions = await Promise.all(plotPoints(origin, destination, attractionCount).map((point) => nearby('/attractions', point, 'attraction')));
   const stops = [...pubs, ...attractions].filter((place): place is Place => Boolean(place)).filter((place, index, all) => all.findIndex((candidate) => candidate.place_id === place.place_id) === index);
+  if (stops.length === 0) throw new Error('No pubs or attractions were found along this route. Try different locations or a longer route.');
   const waypoints = stops.map((place) => `${place.geometry.location.lat},${place.geometry.location.lng}`).join('|');
   const query = new URLSearchParams({ origin: `${origin.latitude},${origin.longitude}`, destination: `${destination.latitude},${destination.longitude}`, mode, key: MAPS_KEY, optimize: 'true' });
   if (waypoints) query.set('waypoints', `optimize:true|${waypoints}`);
