@@ -1,6 +1,6 @@
 export type Coordinate = { latitude: number; longitude: number };
 
-export type TravelMode = "walking" | "bicycling" | "driving";
+export type TravelMode = "walking" | "bicycling";
 
 export type Place = {
   place_id: string;

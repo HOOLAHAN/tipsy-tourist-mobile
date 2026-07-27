@@ -2,8 +2,9 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
+import * as Sharing from "expo-sharing";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -15,19 +16,20 @@ import {
   PanResponder,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import MapView, {
   Marker,
   Polyline,
   PROVIDER_GOOGLE,
   Region,
 } from "react-native-maps";
+import { captureRef } from "react-native-view-shot";
 import {
   getPlaceDetails,
   getPlacePhotoUrl,
@@ -56,7 +58,6 @@ const modes: {
   label: string;
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
 }[] = [
-  { value: "driving", label: "Car", icon: "car" },
   { value: "bicycling", label: "Bike", icon: "bike" },
   { value: "walking", label: "Walk", icon: "walk" },
 ];
@@ -606,8 +607,111 @@ function ItineraryRow({
   );
 }
 
+const ShareCard = forwardRef<
+  View,
+  {
+    route: RoutePlan;
+    start: string;
+    finish: string;
+    travelLabel: string;
+    mapUri: string;
+    onMapLoaded: () => void;
+  }
+>(function ShareCard(
+  { route, start, finish, travelLabel, mapUri, onMapLoaded },
+  ref,
+) {
+  return (
+    <View ref={ref} collapsable={false} style={styles.shareCard}>
+      <View style={styles.shareBrandRow}>
+        <Image
+          source={require("./assets/tipsy-logo.png")}
+          style={styles.shareLogo}
+          resizeMode="contain"
+        />
+        <View style={{ flex: 1 }}>
+          <RainbowTitle />
+          <Text style={styles.shareStrapline}>
+            Your pub-and-sights adventure
+          </Text>
+        </View>
+      </View>
+      <View style={styles.shareStats}>
+        <Text style={styles.shareStat}>{route.stops.length} STOPS</Text>
+        <Text style={styles.shareStat}>{route.distance.toUpperCase()}</Text>
+        <Text style={styles.shareStat}>{route.duration.toUpperCase()}</Text>
+        <Text style={[styles.shareStat, styles.shareMode]}>
+          {travelLabel.toUpperCase()}
+        </Text>
+      </View>
+      <Image
+        source={{ uri: mapUri }}
+        onLoad={onMapLoaded}
+        style={styles.shareMap}
+        resizeMode="cover"
+      />
+      <View style={styles.shareEndpoints}>
+        <View style={[styles.shareEndpointDot, { backgroundColor: "#2563eb" }]}>
+          <Text style={styles.shareEndpointLetter}>S</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.shareEndpointLabel}>START</Text>
+          <Text numberOfLines={1} style={styles.shareEndpointText}>
+            {start}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.shareStopGrid}>
+        {route.stops.map((place, index) => {
+          const color = place.stopType === "pub" ? "#e11d48" : "#7c3aed";
+          return (
+            <View key={place.place_id} style={styles.shareStop}>
+              <View
+                style={[styles.shareStopNumber, { backgroundColor: color }]}
+              >
+                <Text style={styles.shareStopNumberText}>{index + 1}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text numberOfLines={1} style={styles.shareStopName}>
+                  {place.name}
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.shareStopType, { color }]}
+                >
+                  {place.stopType === "pub" ? "PUB" : "ATTRACTION"}
+                  {place.rating ? ` · ★ ${place.rating}` : ""}
+                </Text>
+                {!!place.vicinity && (
+                  <Text numberOfLines={1} style={styles.shareStopAddress}>
+                    {place.vicinity}
+                  </Text>
+                )}
+              </View>
+            </View>
+          );
+        })}
+      </View>
+      <View style={styles.shareEndpoints}>
+        <View style={[styles.shareEndpointDot, { backgroundColor: "#16a34a" }]}>
+          <Text style={styles.shareEndpointLetter}>F</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.shareEndpointLabel}>FINISH</Text>
+          <Text numberOfLines={1} style={styles.shareEndpointText}>
+            {finish}
+          </Text>
+        </View>
+      </View>
+      <Text style={styles.shareFooter}>Planned with Tipsy Tourist</Text>
+    </View>
+  );
+});
+
 export default function App() {
   const mapRef = useRef<MapView>(null);
+  const shareCardRef = useRef<View>(null);
+  const shareImageLoadedRef = useRef<(() => void) | null>(null);
   const [themeName, setThemeName] = useState<ThemeName>("light");
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [itineraryOpen, setItineraryOpen] = useState(false);
@@ -621,6 +725,8 @@ export default function App() {
   const [mode, setMode] = useState<TravelMode>("walking");
   const [route, setRoute] = useState<RoutePlan | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [shareMapUri, setShareMapUri] = useState<string | null>(null);
   const colors = themes[themeName];
   const plannerTranslateY = useRef(new Animated.Value(0)).current;
   const itineraryTranslateY = useRef(new Animated.Value(0)).current;
@@ -839,70 +945,176 @@ export default function App() {
     }
   };
   const travelLabel = mode === "bicycling" ? "cycling" : mode;
+  const shareItinerary = async () => {
+    if (!route || !mapRef.current || sharing) return;
+    setSharing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      if (!(await Sharing.isAvailableAsync()))
+        throw new Error("Sharing is not available on this device.");
+      mapRef.current.fitToCoordinates(route.coordinates, {
+        edgePadding: { top: 110, right: 45, bottom: 110, left: 45 },
+        animated: false,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const mapUri = await mapRef.current.takeSnapshot({
+        width: 1080,
+        height: 600,
+        format: "png",
+        quality: 1,
+        result: "file",
+      });
+      const mapLoaded = new Promise<void>((resolve) => {
+        shareImageLoadedRef.current = resolve;
+      });
+      setShareMapUri(mapUri);
+      await Promise.race([
+        mapLoaded,
+        new Promise<void>((resolve) => setTimeout(resolve, 1500)),
+      ]);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const cardUri = await captureRef(shareCardRef, {
+        format: "png",
+        quality: 1,
+        result: "tmpfile",
+      });
+      await Sharing.shareAsync(cardUri, {
+        mimeType: "image/png",
+        UTI: "public.png",
+        dialogTitle: "Share your Tipsy Tour",
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        "Could not share itinerary",
+        error instanceof Error ? error.message : "Please try again.",
+      );
+    } finally {
+      shareImageLoadedRef.current = null;
+      setShareMapUri(null);
+      setSharing(false);
+    }
+  };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <StatusBar style={themeName === "light" ? "dark" : "light"} />
-      <MapView
-        ref={mapRef}
-        style={StyleSheet.absoluteFill}
-        initialRegion={LONDON}
-        provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
-        customMapStyle={colors.map as any}
-        userInterfaceStyle={themeName}
-        showsUserLocation
-        showsMyLocationButton={false}
-      >
-        {route && (
-          <>
-            <Polyline
-              coordinates={route.coordinates}
-              strokeColor={colors.primary}
-              strokeWidth={6}
-            />
-            <Marker
-              coordinate={route.origin}
-              title="Start"
-              anchor={{ x: 0.5, y: 1 }}
-              zIndex={20}
-            >
-              <RoutePin label="S" color="#2563eb" />
-            </Marker>
-            {route.stops.map((place, index) => (
+    <SafeAreaProvider>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <StatusBar style={themeName === "light" ? "dark" : "light"} />
+        <MapView
+          ref={mapRef}
+          style={StyleSheet.absoluteFill}
+          initialRegion={LONDON}
+          provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
+          customMapStyle={colors.map as any}
+          userInterfaceStyle={themeName}
+          showsUserLocation
+          showsMyLocationButton={false}
+        >
+          {route && (
+            <>
+              <Polyline
+                coordinates={route.coordinates}
+                strokeColor={colors.primary}
+                strokeWidth={6}
+              />
               <Marker
-                key={place.place_id}
-                coordinate={{
-                  latitude: place.geometry.location.lat,
-                  longitude: place.geometry.location.lng,
-                }}
+                coordinate={route.origin}
+                title="Start"
                 anchor={{ x: 0.5, y: 1 }}
-                zIndex={10 + index}
-                onPress={() => openItineraryPlace(place)}
+                zIndex={20}
               >
-                <RoutePin
-                  label={String(index + 1)}
-                  color={place.stopType === "pub" ? "#e11d48" : "#7c3aed"}
-                />
+                <RoutePin label="S" color="#2563eb" />
               </Marker>
-            ))}
-            <Marker
-              coordinate={route.destination}
-              title="Finish"
-              anchor={{ x: 0.5, y: 1 }}
-              zIndex={20}
-            >
-              <RoutePin label="F" color="#16a34a" />
-            </Marker>
-          </>
-        )}
-      </MapView>
+              {route.stops.map((place, index) => (
+                <Marker
+                  key={place.place_id}
+                  coordinate={{
+                    latitude: place.geometry.location.lat,
+                    longitude: place.geometry.location.lng,
+                  }}
+                  anchor={{ x: 0.5, y: 1 }}
+                  zIndex={10 + index}
+                  onPress={() => openItineraryPlace(place)}
+                >
+                  <RoutePin
+                    label={String(index + 1)}
+                    color={place.stopType === "pub" ? "#e11d48" : "#7c3aed"}
+                  />
+                </Marker>
+              ))}
+              <Marker
+                coordinate={route.destination}
+                title="Finish"
+                anchor={{ x: 0.5, y: 1 }}
+                zIndex={20}
+              >
+                <RoutePin label="F" color="#16a34a" />
+              </Marker>
+            </>
+          )}
+        </MapView>
 
-      <SafeAreaView pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-        <View style={styles.headerWrap}>
+        <SafeAreaView pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+          <View style={styles.headerWrap}>
+            <View
+              style={[
+                styles.topCard,
+                styles.headerPill,
+                {
+                  backgroundColor: colors.card,
+                  borderColor: colors.border,
+                  shadowColor: colors.shadow,
+                },
+              ]}
+            >
+              <View style={styles.headerRow}>
+                <View style={styles.logoBox}>
+                  <Image
+                    source={require("./assets/tipsy-logo.png")}
+                    style={styles.brandLogo}
+                    resizeMode="contain"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <RainbowTitle />
+                  <View style={styles.taglineRow}>
+                    <MaterialCommunityIcons
+                      name="map-marker-path"
+                      size={19}
+                      color={colors.muted}
+                    />
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.tagline, { color: colors.muted }]}
+                    >
+                      {route
+                        ? `${route.distance} · ${route.duration} · ${travelLabel}`
+                        : "Pubs, sights, one brilliant route"}
+                    </Text>
+                  </View>
+                </View>
+                <Pressable
+                  accessibilityLabel="Open route planner"
+                  onPress={() => setPlannerOpen(true)}
+                  style={[
+                    styles.menuButton,
+                    styles.filterButton,
+                    { backgroundColor: colors.surface },
+                  ]}
+                >
+                  <Ionicons
+                    name="options-outline"
+                    size={23}
+                    color={colors.primary}
+                  />
+                </Pressable>
+              </View>
+            </View>
+          </View>
           <View
             style={[
-              styles.topCard,
-              styles.headerPill,
+              styles.actionDock,
               {
                 backgroundColor: colors.card,
                 borderColor: colors.border,
@@ -910,324 +1122,315 @@ export default function App() {
               },
             ]}
           >
-            <View style={styles.headerRow}>
-              <View style={styles.logoBox}>
-                <Image
-                  source={require("./assets/tipsy-logo.png")}
-                  style={styles.brandLogo}
-                  resizeMode="contain"
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <RainbowTitle />
-                <View style={styles.taglineRow}>
-                  <MaterialCommunityIcons
-                    name="map-marker-path"
-                    size={19}
-                    color={colors.muted}
-                  />
-                  <Text
-                    numberOfLines={1}
-                    style={[styles.tagline, { color: colors.muted }]}
-                  >
-                    {route
-                      ? `${route.distance} · ${route.duration} · ${travelLabel}`
-                      : "Pubs, sights, one brilliant route"}
-                  </Text>
-                </View>
-              </View>
-              <Pressable
-                accessibilityLabel="Open route planner"
-                onPress={() => setPlannerOpen(true)}
-                style={[
-                  styles.menuButton,
-                  styles.filterButton,
-                  { backgroundColor: colors.surface },
-                ]}
-              >
-                <Ionicons
-                  name="options-outline"
-                  size={23}
-                  color={colors.primary}
-                />
-              </Pressable>
-            </View>
-          </View>
-        </View>
-        <View
-          style={[
-            styles.actionDock,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-              shadowColor: colors.shadow,
-            },
-          ]}
-        >
-          <Pressable
-            accessibilityLabel="Centre map on me"
-            onPress={() => locateMe()}
-            style={[styles.dockButton, { backgroundColor: colors.primary }]}
-          >
-            <Ionicons name="navigate" size={24} color="#fff" />
-          </Pressable>
-          <Pressable
-            accessibilityLabel="Clear route"
-            onPress={clear}
-            style={[styles.dockButton, { backgroundColor: colors.surface }]}
-          >
-            <Ionicons name="close" size={27} color={colors.text} />
-          </Pressable>
-          <Pressable
-            accessibilityLabel={`Use ${themeName === "light" ? "dark" : "light"} mode`}
-            onPress={toggleTheme}
-            style={[styles.dockButton, { backgroundColor: colors.surface }]}
-          >
-            <Ionicons
-              name={themeName === "light" ? "moon" : "sunny"}
-              size={23}
-              color={themeName === "light" ? "#475569" : "#fbbf24"}
-            />
-          </Pressable>
-          {route && (
             <Pressable
-              accessibilityLabel="View itinerary"
-              onPress={() => setItineraryOpen(true)}
+              accessibilityLabel="Centre map on me"
+              onPress={() => locateMe()}
+              style={[styles.dockButton, { backgroundColor: colors.primary }]}
+            >
+              <Ionicons name="navigate" size={24} color="#fff" />
+            </Pressable>
+            <Pressable
+              accessibilityLabel="Clear route"
+              onPress={clear}
               style={[styles.dockButton, { backgroundColor: colors.surface }]}
             >
-              <Ionicons name="list" size={26} color={colors.text} />
+              <Ionicons name="close" size={27} color={colors.text} />
             </Pressable>
-          )}
-        </View>
-      </SafeAreaView>
-
-      <Modal
-        visible={plannerOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={dismissPlanner}
-      >
-        <KeyboardAvoidingView
-          style={styles.sheetOverlay}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
-          <Pressable style={styles.sheetDismiss} onPress={dismissPlanner} />
-          <Animated.View
-            style={[
-              styles.plannerSheet,
-              {
-                backgroundColor: colors.card,
-                borderColor: colors.border,
-                transform: [{ translateY: plannerTranslateY }],
-              },
-            ]}
-          >
-            <View style={styles.dragZone} {...plannerPanResponder.panHandlers}>
-              <View style={styles.sheetHandle} />
-              <Text style={[styles.dragHint, { color: colors.muted }]}>
-                Swipe down to close
-              </Text>
-            </View>
-            <View style={styles.sheetHeader}>
-              <View>
-                <Text style={[styles.sheetEyebrow, { color: colors.primary }]}>
-                  BUILD A ROUTE
-                </Text>
-                <Text style={[styles.sheetTitle, { color: colors.text }]}>
-                  Where are we going?
-                </Text>
-                <Text style={[styles.sheetSubtitle, { color: colors.muted }]}>
-                  Choose your route and we’ll find the stops.
-                </Text>
-              </View>
-            </View>
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.plannerContent}
+            <Pressable
+              accessibilityLabel={`Use ${themeName === "light" ? "dark" : "light"} mode`}
+              onPress={toggleTheme}
+              style={[styles.dockButton, { backgroundColor: colors.surface }]}
             >
-              <View style={styles.routeInputs}>
-                <AutocompleteInput
-                  value={start}
-                  onChange={setStart}
-                  placeholder="Start location"
-                  onLocate={() => locateMe("start")}
-                  colors={colors}
-                />
-                <View
-                  style={[
-                    styles.routeConnector,
-                    { backgroundColor: colors.border },
-                  ]}
-                />
-                <AutocompleteInput
-                  value={finish}
-                  onChange={setFinish}
-                  placeholder="Finish location"
-                  onLocate={() => locateMe("finish")}
-                  colors={colors}
-                />
-              </View>
-              <Text style={[styles.sectionLabel, { color: colors.muted }]}>
-                TRAVEL MODE
-              </Text>
-              <View
-                style={[
-                  styles.modeRow,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                {modes.map((item) => (
-                  <Pressable
-                    key={item.value}
-                    onPress={() => setMode(item.value)}
-                    style={[
-                      styles.modeButton,
-                      mode === item.value && {
-                        backgroundColor: colors.primary,
-                      },
-                    ]}
-                  >
-                    <MaterialCommunityIcons
-                      name={item.icon}
-                      size={20}
-                      color={mode === item.value ? "#fff" : colors.muted}
-                    />
-                    <Text
-                      style={[
-                        styles.modeLabel,
-                        { color: mode === item.value ? "#fff" : colors.text },
-                      ]}
-                    >
-                      {item.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-              <Text style={[styles.sectionLabel, { color: colors.muted }]}>
-                STOPS ALONG THE WAY
-              </Text>
-              <View style={styles.countersRow}>
-                <StopCounter
-                  label="Pubs"
-                  max={7}
-                  value={pubs}
-                  icon="glass-cocktail"
-                  onChange={setPubs}
-                  colors={colors}
-                />
-                <StopCounter
-                  label="Sights"
-                  max={3}
-                  value={attractions}
-                  icon="camera"
-                  onChange={setAttractions}
-                  colors={colors}
-                />
-              </View>
+              <Ionicons
+                name={themeName === "light" ? "moon" : "sunny"}
+                size={23}
+                color={themeName === "light" ? "#475569" : "#fbbf24"}
+              />
+            </Pressable>
+            {route && (
               <Pressable
-                disabled={loading}
-                onPress={submit}
-                style={[
-                  styles.primaryButton,
-                  { backgroundColor: colors.primary },
-                  loading && { opacity: 0.65 },
-                ]}
+                accessibilityLabel="View itinerary"
+                onPress={() => setItineraryOpen(true)}
+                style={[styles.dockButton, { backgroundColor: colors.surface }]}
               >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <>
-                    <MaterialCommunityIcons
-                      name="glass-mug-variant"
-                      size={21}
-                      color="#fff"
-                    />
-                    <Text style={styles.primaryButtonText}>
-                      {route ? "Update my route" : "Plan my Tipsy Tour"}
-                    </Text>
-                    <Ionicons name="arrow-forward" size={21} color="#fff" />
-                  </>
-                )}
+                <Ionicons name="list" size={26} color={colors.text} />
               </Pressable>
-              {route && (
-                <Pressable onPress={clear} style={styles.sheetClear}>
-                  <Ionicons
-                    name="trash-outline"
-                    size={18}
-                    color={colors.muted}
-                  />
-                  <Text
-                    style={[styles.sheetClearText, { color: colors.muted }]}
-                  >
-                    Clear current route
-                  </Text>
-                </Pressable>
-              )}
-            </ScrollView>
-          </Animated.View>
-        </KeyboardAvoidingView>
-      </Modal>
+            )}
+          </View>
+        </SafeAreaView>
 
-      <Modal
-        visible={itineraryOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={
-          detailsFromItinerary ? closeItineraryPlace : closeItinerary
-        }
-      >
-        <View style={[styles.modalOverlay, styles.bottomModalOverlay]}>
-          <Pressable style={styles.modalDismiss} onPress={closeItinerary} />
-          <SafeAreaView style={[styles.modalSafe, styles.bottomModalSafe]}>
+        <Modal
+          visible={plannerOpen}
+          transparent
+          animationType="slide"
+          onRequestClose={dismissPlanner}
+        >
+          <KeyboardAvoidingView
+            style={styles.sheetOverlay}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+          >
+            <Pressable style={styles.sheetDismiss} onPress={dismissPlanner} />
             <Animated.View
               style={[
-                styles.modalPanel,
-                styles.bottomModalPanel,
-                styles.itineraryPanel,
+                styles.plannerSheet,
                 {
                   backgroundColor: colors.card,
                   borderColor: colors.border,
-                  transform: [{ translateY: itineraryTranslateY }],
+                  transform: [{ translateY: plannerTranslateY }],
                 },
               ]}
             >
               <View
-                style={styles.modalDragZone}
-                {...itineraryPanResponder.panHandlers}
+                style={styles.dragZone}
+                {...plannerPanResponder.panHandlers}
               >
-                <View style={styles.modalHandle} />
+                <View style={styles.sheetHandle} />
+                <Text style={[styles.dragHint, { color: colors.muted }]}>
+                  Swipe down to close
+                </Text>
               </View>
-              {detailsFromItinerary && selectedPlace ? (
-                <Animated.View
+              <View style={styles.sheetHeader}>
+                <View>
+                  <Text
+                    style={[styles.sheetEyebrow, { color: colors.primary }]}
+                  >
+                    BUILD A ROUTE
+                  </Text>
+                  <Text style={[styles.sheetTitle, { color: colors.text }]}>
+                    Where are we going?
+                  </Text>
+                  <Text style={[styles.sheetSubtitle, { color: colors.muted }]}>
+                    Choose your route and we’ll find the stops.
+                  </Text>
+                </View>
+              </View>
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.plannerContent}
+              >
+                <View style={styles.routeInputs}>
+                  <AutocompleteInput
+                    value={start}
+                    onChange={setStart}
+                    placeholder="Start location"
+                    onLocate={() => locateMe("start")}
+                    colors={colors}
+                  />
+                  <View
+                    style={[
+                      styles.routeConnector,
+                      { backgroundColor: colors.border },
+                    ]}
+                  />
+                  <AutocompleteInput
+                    value={finish}
+                    onChange={setFinish}
+                    placeholder="Finish location"
+                    onLocate={() => locateMe("finish")}
+                    colors={colors}
+                  />
+                </View>
+                <Text style={[styles.sectionLabel, { color: colors.muted }]}>
+                  TRAVEL MODE
+                </Text>
+                <View
                   style={[
-                    styles.drawerPage,
-                    { transform: [{ translateX: detailTranslateX }] },
+                    styles.modeRow,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                    },
                   ]}
                 >
-                  <View style={styles.modalHeader}>
-                    <View style={styles.drawerTitleRow}>
-                      <Pressable
+                  {modes.map((item) => (
+                    <Pressable
+                      key={item.value}
+                      onPress={() => setMode(item.value)}
+                      style={[
+                        styles.modeButton,
+                        mode === item.value && {
+                          backgroundColor: colors.primary,
+                        },
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name={item.icon}
+                        size={20}
+                        color={mode === item.value ? "#fff" : colors.muted}
+                      />
+                      <Text
                         style={[
-                          styles.backButton,
-                          { backgroundColor: colors.surface },
+                          styles.modeLabel,
+                          { color: mode === item.value ? "#fff" : colors.text },
                         ]}
-                        onPress={closeItineraryPlace}
                       >
-                        <Ionicons
-                          name="arrow-back"
-                          size={22}
-                          color={colors.text}
-                        />
-                      </Pressable>
+                        {item.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <Text style={[styles.sectionLabel, { color: colors.muted }]}>
+                  STOPS ALONG THE WAY
+                </Text>
+                <View style={styles.countersRow}>
+                  <StopCounter
+                    label="Pubs"
+                    max={10}
+                    value={pubs}
+                    icon="glass-cocktail"
+                    onChange={setPubs}
+                    colors={colors}
+                  />
+                  <StopCounter
+                    label="Sights"
+                    max={10}
+                    value={attractions}
+                    icon="camera"
+                    onChange={setAttractions}
+                    colors={colors}
+                  />
+                </View>
+                <Pressable
+                  disabled={loading}
+                  onPress={submit}
+                  style={[
+                    styles.primaryButton,
+                    { backgroundColor: colors.primary },
+                    loading && { opacity: 0.65 },
+                  ]}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <MaterialCommunityIcons
+                        name="glass-mug-variant"
+                        size={21}
+                        color="#fff"
+                      />
+                      <Text style={styles.primaryButtonText}>
+                        {route ? "Update my route" : "Plan my Tipsy Tour"}
+                      </Text>
+                      <Ionicons name="arrow-forward" size={21} color="#fff" />
+                    </>
+                  )}
+                </Pressable>
+                {route && (
+                  <Pressable onPress={clear} style={styles.sheetClear}>
+                    <Ionicons
+                      name="trash-outline"
+                      size={18}
+                      color={colors.muted}
+                    />
+                    <Text
+                      style={[styles.sheetClearText, { color: colors.muted }]}
+                    >
+                      Clear current route
+                    </Text>
+                  </Pressable>
+                )}
+              </ScrollView>
+            </Animated.View>
+          </KeyboardAvoidingView>
+        </Modal>
+
+        <Modal
+          visible={itineraryOpen}
+          transparent
+          animationType="slide"
+          onRequestClose={
+            detailsFromItinerary ? closeItineraryPlace : closeItinerary
+          }
+        >
+          <View style={[styles.modalOverlay, styles.bottomModalOverlay]}>
+            <Pressable style={styles.modalDismiss} onPress={closeItinerary} />
+            <SafeAreaView style={[styles.modalSafe, styles.bottomModalSafe]}>
+              <Animated.View
+                style={[
+                  styles.modalPanel,
+                  styles.bottomModalPanel,
+                  styles.itineraryPanel,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
+                    transform: [{ translateY: itineraryTranslateY }],
+                  },
+                ]}
+              >
+                <View
+                  style={styles.modalDragZone}
+                  {...itineraryPanResponder.panHandlers}
+                >
+                  <View style={styles.modalHandle} />
+                </View>
+                {detailsFromItinerary && selectedPlace ? (
+                  <Animated.View
+                    style={[
+                      styles.drawerPage,
+                      { transform: [{ translateX: detailTranslateX }] },
+                    ]}
+                  >
+                    <View style={styles.modalHeader}>
+                      <View style={styles.drawerTitleRow}>
+                        <Pressable
+                          style={[
+                            styles.backButton,
+                            { backgroundColor: colors.surface },
+                          ]}
+                          onPress={closeItineraryPlace}
+                        >
+                          <Ionicons
+                            name="arrow-back"
+                            size={22}
+                            color={colors.text}
+                          />
+                        </Pressable>
+                        <View>
+                          <Text
+                            style={[styles.modalTitle, { color: colors.text }]}
+                          >
+                            Location details
+                          </Text>
+                          <Text
+                            style={[
+                              styles.modalSubtitle,
+                              { color: colors.muted },
+                            ]}
+                          >
+                            Stop{" "}
+                            {(route?.stops.findIndex(
+                              (item) =>
+                                item.place_id === selectedPlace.place_id,
+                            ) ?? 0) + 1}{" "}
+                            of {route?.stops.length}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                    <ScrollView
+                      showsVerticalScrollIndicator={false}
+                      contentContainerStyle={styles.locationContent}
+                    >
+                      <PlaceCard
+                        place={selectedPlace}
+                        index={
+                          route?.stops.findIndex(
+                            (item) => item.place_id === selectedPlace.place_id,
+                          ) ?? 0
+                        }
+                        colors={colors}
+                      />
+                    </ScrollView>
+                  </Animated.View>
+                ) : (
+                  <View style={styles.drawerPage}>
+                    <View style={styles.modalHeader}>
                       <View>
                         <Text
                           style={[styles.modalTitle, { color: colors.text }]}
                         >
-                          Location details
+                          Your itinerary
                         </Text>
                         <Text
                           style={[
@@ -1235,106 +1438,117 @@ export default function App() {
                             { color: colors.muted },
                           ]}
                         >
-                          Stop{" "}
-                          {(route?.stops.findIndex(
-                            (item) => item.place_id === selectedPlace.place_id,
-                          ) ?? 0) + 1}{" "}
-                          of {route?.stops.length}
+                          Hold a stop to reorder · tap for details
                         </Text>
                       </View>
+                      <Pressable
+                        accessibilityLabel="Share itinerary as an image"
+                        disabled={sharing}
+                        onPress={shareItinerary}
+                        style={[
+                          styles.shareButton,
+                          { backgroundColor: colors.surface },
+                        ]}
+                      >
+                        {sharing ? (
+                          <ActivityIndicator
+                            size="small"
+                            color={colors.primary}
+                          />
+                        ) : (
+                          <Ionicons
+                            name="share-outline"
+                            size={22}
+                            color={colors.primary}
+                          />
+                        )}
+                      </Pressable>
                     </View>
-                  </View>
-                  <ScrollView
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={styles.locationContent}
-                  >
-                    <PlaceCard
-                      place={selectedPlace}
-                      index={
-                        route?.stops.findIndex(
-                          (item) => item.place_id === selectedPlace.place_id,
-                        ) ?? 0
-                      }
-                      colors={colors}
-                    />
-                  </ScrollView>
-                </Animated.View>
-              ) : (
-                <View style={styles.drawerPage}>
-                  <View style={styles.modalHeader}>
-                    <View>
-                      <Text style={[styles.modalTitle, { color: colors.text }]}>
-                        Your itinerary
+                    <View style={styles.summaryChips}>
+                      <Text
+                        style={[
+                          styles.summaryChip,
+                          {
+                            backgroundColor: colors.surface,
+                            color: colors.text,
+                          },
+                        ]}
+                      >
+                        {route?.stops.length ?? 0} STOPS
                       </Text>
                       <Text
-                        style={[styles.modalSubtitle, { color: colors.muted }]}
+                        style={[
+                          styles.summaryChip,
+                          {
+                            backgroundColor: colors.surface,
+                            color: colors.text,
+                          },
+                        ]}
                       >
-                        Hold a stop to reorder · tap for details
+                        {route?.distance.toUpperCase()}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.summaryChip,
+                          {
+                            backgroundColor: colors.surface,
+                            color: colors.text,
+                          },
+                        ]}
+                      >
+                        {route?.duration.toUpperCase()}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.summaryChip,
+                          { backgroundColor: colors.primary, color: "#fff" },
+                        ]}
+                      >
+                        {travelLabel.toUpperCase()}
                       </Text>
                     </View>
+                    <ScrollView
+                      style={styles.timelineScroll}
+                      scrollEnabled={!isReordering}
+                      removeClippedSubviews={false}
+                      showsVerticalScrollIndicator={false}
+                      contentContainerStyle={styles.timeline}
+                    >
+                      {route?.stops.map((place, index) => (
+                        <ItineraryRow
+                          key={place.place_id}
+                          place={place}
+                          index={index}
+                          total={route.stops.length}
+                          isLast={index === route.stops.length - 1}
+                          colors={colors}
+                          onDrop={(from, to) => moveStop(from, to - from)}
+                          onDragChange={setIsReordering}
+                          onOpen={() => openItineraryPlace(place)}
+                        />
+                      ))}
+                    </ScrollView>
                   </View>
-                  <View style={styles.summaryChips}>
-                    <Text
-                      style={[
-                        styles.summaryChip,
-                        { backgroundColor: colors.surface, color: colors.text },
-                      ]}
-                    >
-                      {route?.stops.length ?? 0} STOPS
-                    </Text>
-                    <Text
-                      style={[
-                        styles.summaryChip,
-                        { backgroundColor: colors.surface, color: colors.text },
-                      ]}
-                    >
-                      {route?.distance.toUpperCase()}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.summaryChip,
-                        { backgroundColor: colors.surface, color: colors.text },
-                      ]}
-                    >
-                      {route?.duration.toUpperCase()}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.summaryChip,
-                        { backgroundColor: colors.primary, color: "#fff" },
-                      ]}
-                    >
-                      {travelLabel.toUpperCase()}
-                    </Text>
-                  </View>
-                  <ScrollView
-                    style={styles.timelineScroll}
-                    scrollEnabled={!isReordering}
-                    removeClippedSubviews={false}
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={styles.timeline}
-                  >
-                    {route?.stops.map((place, index) => (
-                      <ItineraryRow
-                        key={place.place_id}
-                        place={place}
-                        index={index}
-                        total={route.stops.length}
-                        isLast={index === route.stops.length - 1}
-                        colors={colors}
-                        onDrop={(from, to) => moveStop(from, to - from)}
-                        onDragChange={setIsReordering}
-                        onOpen={() => openItineraryPlace(place)}
-                      />
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-            </Animated.View>
-          </SafeAreaView>
-        </View>
-      </Modal>
-    </View>
+                )}
+              </Animated.View>
+            </SafeAreaView>
+          </View>
+        </Modal>
+        {route && shareMapUri && (
+          <View pointerEvents="none" style={styles.shareCaptureStage}>
+            <ShareCard
+              ref={shareCardRef}
+              route={route}
+              start={start}
+              finish={finish}
+              travelLabel={travelLabel}
+              mapUri={shareMapUri}
+              onMapLoaded={() => shareImageLoadedRef.current?.()}
+            />
+          </View>
+        )}
+      </View>
+    </SafeAreaProvider>
   );
 }
 
@@ -1858,4 +2072,102 @@ const styles = StyleSheet.create({
   detailRow: { flexDirection: "row", alignItems: "center", gap: 11 },
   detailText: { flex: 1, fontSize: 16, lineHeight: 22 },
   detailLink: { flex: 1, fontSize: 16, lineHeight: 22 },
+  shareButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  shareCaptureStage: {
+    position: "absolute",
+    left: -2000,
+    top: 0,
+    width: 390,
+  },
+  shareCard: {
+    width: 390,
+    backgroundColor: "#ffffff",
+    paddingHorizontal: 20,
+    paddingTop: 22,
+    paddingBottom: 18,
+  },
+  shareBrandRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  shareLogo: { width: 54, height: 54 },
+  shareStrapline: { color: "#64748b", fontSize: 12, marginTop: 1 },
+  shareStats: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 16,
+    marginBottom: 12,
+  },
+  shareStat: {
+    color: "#0f172a",
+    backgroundColor: "#eff4fa",
+    borderRadius: 7,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  shareMode: { color: "#ffffff", backgroundColor: BLUE },
+  shareMap: {
+    width: "100%",
+    height: 194,
+    borderRadius: 16,
+    backgroundColor: "#e2e8f0",
+  },
+  shareEndpoints: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginVertical: 12,
+  },
+  shareEndpointDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  shareEndpointLetter: { color: "#ffffff", fontSize: 13, fontWeight: "900" },
+  shareEndpointLabel: {
+    color: "#64748b",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
+  shareEndpointText: { color: "#0f172a", fontSize: 13, fontWeight: "700" },
+  shareStopGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  shareStop: {
+    width: "48.8%",
+    minHeight: 62,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  shareStopNumber: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  shareStopNumberText: { color: "#ffffff", fontSize: 10, fontWeight: "900" },
+  shareStopName: { color: "#0f172a", fontSize: 11, fontWeight: "800" },
+  shareStopType: { fontSize: 8, fontWeight: "900", marginTop: 2 },
+  shareStopAddress: { color: "#64748b", fontSize: 8, marginTop: 2 },
+  shareFooter: {
+    color: "#94a3b8",
+    fontSize: 9,
+    fontWeight: "700",
+    textAlign: "center",
+    marginTop: 4,
+  },
 });

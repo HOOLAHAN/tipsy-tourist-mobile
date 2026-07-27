@@ -89,31 +89,29 @@ function isQualityCandidate(
   );
 }
 
-async function nearby(
+async function nearbyCandidates(
   path: "/places" | "/attractions",
   point: Coordinate,
   type: Place["stopType"],
-  excluded: Set<string>,
-): Promise<Place | undefined> {
+): Promise<Place[]> {
   const response = await post<{
     data: { results?: Omit<Place, "stopType">[] } | Omit<Place, "stopType">[];
   }>(path, { lat: point.latitude, lng: point.longitude });
   const results = Array.isArray(response.data)
     ? response.data
     : response.data?.results;
-  const available = (results ?? []).filter(
-    (place) => !excluded.has(place.place_id),
-  );
+  const available = results ?? [];
   const quality = available.filter((place) => isQualityCandidate(place, type));
   // Prefer established, well-reviewed places, but retain a fallback in quieter areas.
-  const place = (
+  return (
     quality.length
       ? quality
       : available.filter((item) => (item.rating ?? 0) >= 3.8)
-  ).sort(
-    (a, b) => candidateScore(b, point, type) - candidateScore(a, point, type),
-  )[0];
-  return place ? { ...place, stopType: type } : undefined;
+  )
+    .sort(
+      (a, b) => candidateScore(b, point, type) - candidateScore(a, point, type),
+    )
+    .map((place) => ({ ...place, stopType: type }));
 }
 
 function plotPoints(start: Coordinate, end: Coordinate, count: number) {
@@ -262,14 +260,19 @@ export async function planRoute(
   const points = plotPoints(origin, destination, stopTypes.length);
   const stops: Place[] = [];
   const selectedIds = new Set<string>();
-  // Select sequentially so each stop occupies its own section of the journey.
+  const candidateGroups = await Promise.all(
+    stopTypes.map((type, index) =>
+      nearbyCandidates(
+        type === "pub" ? "/places" : "/attractions",
+        points[index],
+        type,
+      ),
+    ),
+  );
+  // Select in journey order after fetching in parallel, rejecting duplicates between areas.
   for (let index = 0; index < stopTypes.length; index += 1) {
-    const type = stopTypes[index];
-    const place = await nearby(
-      type === "pub" ? "/places" : "/attractions",
-      points[index],
-      type,
-      selectedIds,
+    const place = candidateGroups[index].find(
+      (candidate) => !selectedIds.has(candidate.place_id),
     );
     if (place) {
       stops.push(place);
