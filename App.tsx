@@ -33,6 +33,7 @@ import {
   getPlacePhotoUrl,
   getPlaceSuggestions,
   planRoute,
+  routeThroughStops,
 } from "./src/api";
 import { ThemeName, themes } from "./src/theme";
 import {
@@ -800,19 +801,43 @@ export default function App() {
   };
   const toggleTheme = () =>
     setThemeName((current) => (current === "light" ? "dark" : "light"));
-  const moveStop = (index: number, amount: number) =>
-    setRoute((current) => {
-      if (
-        !current ||
-        index + amount < 0 ||
-        index + amount >= current.stops.length
-      )
-        return current;
-      const stops = [...current.stops];
-      const [item] = stops.splice(index, 1);
-      stops.splice(index + amount, 0, item);
-      return { ...current, stops };
-    });
+  const moveStop = async (index: number, amount: number) => {
+    if (!route || index + amount < 0 || index + amount >= route.stops.length)
+      return;
+    const previous = route;
+    const stops = [...route.stops];
+    const [item] = stops.splice(index, 1);
+    stops.splice(index + amount, 0, item);
+    const stopOrder = stops.map((place) => place.place_id).join("|");
+
+    // Update the itinerary immediately, then replace the map geometry when Directions responds.
+    setRoute({ ...route, stops });
+    try {
+      const updated = await routeThroughStops(
+        route.origin,
+        route.destination,
+        stops,
+        mode,
+      );
+      setRoute((current) =>
+        current?.stops.map((place) => place.place_id).join("|") === stopOrder
+          ? updated
+          : current,
+      );
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      setRoute((current) =>
+        current?.stops.map((place) => place.place_id).join("|") === stopOrder
+          ? previous
+          : current,
+      );
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        "Could not update route",
+        error instanceof Error ? error.message : "Please try again.",
+      );
+    }
+  };
   const travelLabel = mode === "bicycling" ? "cycling" : mode;
 
   return (

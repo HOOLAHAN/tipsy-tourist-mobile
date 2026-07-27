@@ -191,42 +191,15 @@ export function getPlacePhotoUrl(details: PlaceDetails | null, width = 900) {
     : undefined;
 }
 
-export async function planRoute(
-  startText: string,
-  finishText: string,
-  pubCount: number,
-  attractionCount: number,
+export async function routeThroughStops(
+  origin: Coordinate,
+  destination: Coordinate,
+  stops: Place[],
   mode: TravelMode,
 ): Promise<RoutePlan> {
   if (!MAPS_KEY)
     throw new Error(
       "Add EXPO_PUBLIC_GOOGLE_MAPS_API_KEY to .env before planning a route.",
-    );
-  const [origin, destination] = await Promise.all([
-    geocode(startText),
-    geocode(finishText),
-  ]);
-  const stopTypes = mixedStopTypes(pubCount, attractionCount);
-  const points = plotPoints(origin, destination, stopTypes.length);
-  const stops: Place[] = [];
-  const selectedIds = new Set<string>();
-  // Select sequentially so each stop occupies its own section of the journey.
-  for (let index = 0; index < stopTypes.length; index += 1) {
-    const type = stopTypes[index];
-    const place = await nearby(
-      type === "pub" ? "/places" : "/attractions",
-      points[index],
-      type,
-      selectedIds,
-    );
-    if (place) {
-      stops.push(place);
-      selectedIds.add(place.place_id);
-    }
-  }
-  if (stops.length === 0)
-    throw new Error(
-      "No pubs or attractions were found along this route. Try different locations or a longer route.",
     );
   const waypoints = stops
     .map(
@@ -268,4 +241,44 @@ export async function planRoute(
         ? `${Math.floor(seconds / 3600)} hr ${Math.round((seconds % 3600) / 60)} min`
         : `${Math.round(seconds / 60)} min`,
   };
+}
+
+export async function planRoute(
+  startText: string,
+  finishText: string,
+  pubCount: number,
+  attractionCount: number,
+  mode: TravelMode,
+): Promise<RoutePlan> {
+  if (!MAPS_KEY)
+    throw new Error(
+      "Add EXPO_PUBLIC_GOOGLE_MAPS_API_KEY to .env before planning a route.",
+    );
+  const [origin, destination] = await Promise.all([
+    geocode(startText),
+    geocode(finishText),
+  ]);
+  const stopTypes = mixedStopTypes(pubCount, attractionCount);
+  const points = plotPoints(origin, destination, stopTypes.length);
+  const stops: Place[] = [];
+  const selectedIds = new Set<string>();
+  // Select sequentially so each stop occupies its own section of the journey.
+  for (let index = 0; index < stopTypes.length; index += 1) {
+    const type = stopTypes[index];
+    const place = await nearby(
+      type === "pub" ? "/places" : "/attractions",
+      points[index],
+      type,
+      selectedIds,
+    );
+    if (place) {
+      stops.push(place);
+      selectedIds.add(place.place_id);
+    }
+  }
+  if (stops.length === 0)
+    throw new Error(
+      "No pubs or attractions were found along this route. Try different locations or a longer route.",
+    );
+  return routeThroughStops(origin, destination, stops, mode);
 }
