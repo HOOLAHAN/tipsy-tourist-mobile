@@ -1,6 +1,6 @@
 export type Coordinate = { latitude: number; longitude: number };
 
-export type TravelMode = 'walking' | 'bicycling' | 'driving';
+export type TravelMode = "walking" | "bicycling" | "driving";
 
 export type Place = {
   place_id: string;
@@ -9,7 +9,9 @@ export type Place = {
   rating?: number;
   user_ratings_total?: number;
   price_level?: number;
-  stopType: 'pub' | 'attraction';
+  business_status?: string;
+  types?: string[];
+  stopType: "pub" | "attraction";
   geometry: { location: { lat: number; lng: number } };
 };
 
@@ -25,7 +27,12 @@ export type PlaceDetails = {
   vicinity?: string;
 };
 
-export type PlaceSuggestion = { place_id: string; description: string; main_text: string; secondary_text: string };
+export type PlaceSuggestion = {
+  place_id: string;
+  description: string;
+  main_text: string;
+  secondary_text: string;
+};
 
 export type RoutePlan = {
   origin: Coordinate;

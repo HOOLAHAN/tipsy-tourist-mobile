@@ -1415,7 +1415,7 @@ const styles = StyleSheet.create({
   },
   itineraryPanel: { height: "100%", maxHeight: "100%" },
   modalDragZone: { height: 46, alignItems: "center", justifyContent: "center" },
-  drawerPage: { flexShrink: 1 },
+  drawerPage: { flex: 1, minHeight: 0, overflow: "hidden" },
   drawerTitleRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   backButton: {
     width: 40,
@@ -1435,7 +1435,7 @@ const styles = StyleSheet.create({
   },
   modalSubtitle: { fontSize: 13, marginTop: 3 },
   timeline: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 30 },
-  timelineScroll: { flexGrow: 0, flexShrink: 1, overflow: "visible" },
+  timelineScroll: { flex: 1, minHeight: 0, overflow: "hidden" },
   timelineRow: { flexDirection: "row", minHeight: 112 },
   timelineRail: { width: 42, alignItems: "center" },
   timelineDot: {
