@@ -9,6 +9,7 @@ const iosMapsKey = production
 export default {
   expo: {
     name: "Tipsy Tourist",
+    owner: "iainhoolahan",
     slug: "tipsy-tourist-mobile",
     scheme: "tipsytourist",
     version: "1.0.0",
@@ -54,5 +55,10 @@ export default {
       ],
     ],
     web: { favicon: "./assets/favicon.png" },
+    extra: {
+      eas: {
+        projectId: "fc3533c0-4be0-4c12-8d40-2ea6659eaaf6",
+      },
+    },
   },
 };
