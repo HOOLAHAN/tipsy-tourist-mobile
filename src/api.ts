@@ -11,7 +11,11 @@ import {
 const API_URL =
   process.env.EXPO_PUBLIC_API_URL ??
   "https://t5jalxqqsb.execute-api.eu-west-2.amazonaws.com";
-const MAPS_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+const production =
+  process.env.EXPO_PUBLIC_TIPSY_TOURIST_ENVIRONMENT === "production";
+const MAPS_KEY = production
+  ? process.env.EXPO_PUBLIC_TIPSY_TOURIST_MOBILE_SERVICES_PRODUCTION
+  : process.env.EXPO_PUBLIC_TIPSY_TOURIST_MOBILE_SERVICES_DEVELOPMENT;
 
 async function post<T>(path: string, body: object): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
@@ -197,7 +201,7 @@ export async function routeThroughStops(
 ): Promise<RoutePlan> {
   if (!MAPS_KEY)
     throw new Error(
-      "Add EXPO_PUBLIC_GOOGLE_MAPS_API_KEY to .env before planning a route.",
+      "Add the Tipsy Tourist mobile services key to your environment before planning a route.",
     );
   const waypoints = stops
     .map(
@@ -250,7 +254,7 @@ export async function planRoute(
 ): Promise<RoutePlan> {
   if (!MAPS_KEY)
     throw new Error(
-      "Add EXPO_PUBLIC_GOOGLE_MAPS_API_KEY to .env before planning a route.",
+      "Add the Tipsy Tourist mobile services key to your environment before planning a route.",
     );
   const [origin, destination] = await Promise.all([
     geocode(startText),
