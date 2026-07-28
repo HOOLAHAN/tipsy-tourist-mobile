@@ -821,17 +821,28 @@ export default function App() {
   const plannerTranslateY = useRef(new Animated.Value(0)).current;
   const itineraryTranslateY = useRef(new Animated.Value(0)).current;
   const infoTranslateY = useRef(new Animated.Value(0)).current;
+  const plannerClosingRef = useRef(false);
+  const itineraryClosingRef = useRef(false);
+  const infoClosingRef = useRef(false);
   const detailTranslateX = useRef(new Animated.Value(420)).current;
 
-  const dismissPlanner = () =>
+  const openPlanner = () => {
+    plannerClosingRef.current = false;
+    plannerTranslateY.stopAnimation();
+    plannerTranslateY.setValue(0);
+    setPlannerOpen(true);
+  };
+  const dismissPlanner = () => {
+    if (plannerClosingRef.current) return;
+    plannerClosingRef.current = true;
     Animated.timing(plannerTranslateY, {
       toValue: 700,
       duration: 220,
       useNativeDriver: true,
     }).start(() => {
       setPlannerOpen(false);
-      plannerTranslateY.setValue(0);
     });
+  };
   const plannerPanResponder = useMemo(
     () =>
       PanResponder.create({
@@ -862,7 +873,15 @@ export default function App() {
     [plannerTranslateY],
   );
 
-  const closeItinerary = () =>
+  const openItinerary = () => {
+    itineraryClosingRef.current = false;
+    itineraryTranslateY.stopAnimation();
+    itineraryTranslateY.setValue(0);
+    setItineraryOpen(true);
+  };
+  const closeItinerary = () => {
+    if (itineraryClosingRef.current) return;
+    itineraryClosingRef.current = true;
     Animated.timing(itineraryTranslateY, {
       toValue: 800,
       duration: 220,
@@ -871,9 +890,9 @@ export default function App() {
       setItineraryOpen(false);
       setDetailsFromItinerary(false);
       setSelectedPlace(null);
-      itineraryTranslateY.setValue(0);
       detailTranslateX.setValue(420);
     });
+  };
   const itineraryPanResponder = useMemo(
     () =>
       PanResponder.create({
@@ -904,15 +923,23 @@ export default function App() {
     [itineraryTranslateY],
   );
 
-  const closeInfo = () =>
+  const openInfo = () => {
+    infoClosingRef.current = false;
+    infoTranslateY.stopAnimation();
+    infoTranslateY.setValue(0);
+    setInfoOpen(true);
+  };
+  const closeInfo = () => {
+    if (infoClosingRef.current) return;
+    infoClosingRef.current = true;
     Animated.timing(infoTranslateY, {
       toValue: 800,
       duration: 220,
       useNativeDriver: true,
     }).start(() => {
       setInfoOpen(false);
-      infoTranslateY.setValue(0);
     });
+  };
   const infoPanResponder = useMemo(
     () =>
       PanResponder.create({
@@ -949,6 +976,7 @@ export default function App() {
     Haptics.selectionAsync();
     setSelectedPlace(place);
     setDetailsFromItinerary(true);
+    itineraryClosingRef.current = false;
     setItineraryOpen(true);
     itineraryTranslateY.setValue(0);
     detailTranslateX.setValue(420);
@@ -1035,7 +1063,7 @@ export default function App() {
     setRoute(null);
     setStart("");
     setFinish("");
-    setPlannerOpen(true);
+    openPlanner();
   };
   const toggleTheme = () =>
     setThemeName((current) => (current === "light" ? "dark" : "light"));
@@ -1238,7 +1266,7 @@ export default function App() {
                 </View>
                 <Pressable
                   accessibilityLabel="Open route planner"
-                  onPress={() => setPlannerOpen(true)}
+                  onPress={openPlanner}
                   style={[
                     styles.menuButton,
                     styles.filterButton,
@@ -1271,13 +1299,15 @@ export default function App() {
             >
               <Ionicons name="navigate" size={24} color="#fff" />
             </Pressable>
-            <Pressable
-              accessibilityLabel="Clear route"
-              onPress={clear}
-              style={[styles.dockButton, { backgroundColor: colors.surface }]}
-            >
-              <Ionicons name="close" size={27} color={colors.text} />
-            </Pressable>
+            {route && (
+              <Pressable
+                accessibilityLabel="Clear route"
+                onPress={clear}
+                style={[styles.dockButton, { backgroundColor: colors.surface }]}
+              >
+                <Ionicons name="close" size={27} color={colors.text} />
+              </Pressable>
+            )}
             <Pressable
               accessibilityLabel={`Use ${themeName === "light" ? "dark" : "light"} mode`}
               onPress={toggleTheme}
@@ -1291,7 +1321,7 @@ export default function App() {
             </Pressable>
             <Pressable
               accessibilityLabel="About and support"
-              onPress={() => setInfoOpen(true)}
+              onPress={openInfo}
               style={[styles.dockButton, { backgroundColor: colors.surface }]}
             >
               <Ionicons
@@ -1303,7 +1333,7 @@ export default function App() {
             {route && (
               <Pressable
                 accessibilityLabel="View itinerary"
-                onPress={() => setItineraryOpen(true)}
+                onPress={openItinerary}
                 style={[styles.dockButton, { backgroundColor: colors.surface }]}
               >
                 <Ionicons name="list" size={26} color={colors.text} />
@@ -1315,7 +1345,7 @@ export default function App() {
         <Modal
           visible={plannerOpen}
           transparent
-          animationType="slide"
+          animationType="none"
           onRequestClose={dismissPlanner}
         >
           <KeyboardAvoidingView
@@ -1491,7 +1521,7 @@ export default function App() {
         <Modal
           visible={infoOpen}
           transparent
-          animationType="slide"
+          animationType="none"
           onRequestClose={closeInfo}
         >
           <View style={[styles.modalOverlay, styles.bottomModalOverlay]}>
@@ -1535,8 +1565,8 @@ export default function App() {
                     </View>
                   </View>
                   <Text style={[styles.infoIntro, { color: colors.text }]}>
-                    Plan a mixed pub-and-sights journey, explore each stop,
-                    reorder your itinerary and share the finished route.
+                    Plan mixed pub-and-sights routes, reorder stops and share
+                    your trip.
                   </Text>
                   <View
                     style={[
@@ -1555,8 +1585,8 @@ export default function App() {
                     <Text
                       style={[styles.infoNoticeText, { color: colors.text }]}
                     >
-                      For people of legal drinking age. Drink responsibly, never
-                      drink and drive, and do not cycle while impaired.
+                      Legal drinking age only. Drink responsibly; never drive or
+                      cycle while impaired.
                     </Text>
                   </View>
                   <Text style={[styles.sectionLabel, { color: colors.muted }]}>
@@ -1613,9 +1643,8 @@ export default function App() {
                     <Text style={styles.infoContactText}>Contact support</Text>
                   </Pressable>
                   <Text style={[styles.infoFinePrint, { color: colors.muted }]}>
-                    Maps, directions and place information are provided using
-                    Google Maps services and may change. Always check venue
-                    details and local conditions.
+                    Google Maps information may change. Check venue details and
+                    local conditions.
                   </Text>
                 </ScrollView>
               </Animated.View>
@@ -1626,7 +1655,7 @@ export default function App() {
         <Modal
           visible={itineraryOpen}
           transparent
-          animationType="slide"
+          animationType="none"
           onRequestClose={
             detailsFromItinerary ? closeItineraryPlace : closeItinerary
           }
@@ -2489,41 +2518,41 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   infoContent: {
-    paddingHorizontal: 20,
-    paddingBottom: Platform.OS === "ios" ? 44 : 28,
-    gap: 16,
+    paddingHorizontal: 16,
+    paddingBottom: Platform.OS === "ios" ? 34 : 20,
+    gap: 10,
   },
-  infoBrand: { flexDirection: "row", alignItems: "center", gap: 14 },
-  infoLogo: { width: 68, height: 68 },
-  infoVersion: { fontSize: 12, marginTop: 2 },
-  infoIntro: { fontSize: 17, lineHeight: 25, fontWeight: "600" },
+  infoBrand: { flexDirection: "row", alignItems: "center", gap: 10 },
+  infoLogo: { width: 48, height: 48 },
+  infoVersion: { fontSize: 11 },
+  infoIntro: { fontSize: 14, lineHeight: 19, fontWeight: "600" },
   infoNotice: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 11,
+    gap: 9,
     borderWidth: 1,
-    borderRadius: 22,
-    padding: 15,
+    borderRadius: 18,
+    padding: 11,
   },
-  infoNoticeText: { flex: 1, fontSize: 14, lineHeight: 20 },
-  infoLinks: { borderWidth: 1, borderRadius: 24, overflow: "hidden" },
+  infoNoticeText: { flex: 1, fontSize: 12, lineHeight: 17 },
+  infoLinks: { borderWidth: 1, borderRadius: 20, overflow: "hidden" },
   infoLink: {
-    minHeight: 54,
+    minHeight: 43,
     flexDirection: "row",
     alignItems: "center",
-    gap: 11,
-    paddingHorizontal: 16,
+    gap: 9,
+    paddingHorizontal: 13,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  infoLinkText: { flex: 1, fontSize: 15, fontWeight: "700" },
+  infoLinkText: { flex: 1, fontSize: 13, fontWeight: "700" },
   infoContact: {
-    minHeight: 54,
+    minHeight: 46,
     borderRadius: 999,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 9,
   },
-  infoContactText: { color: "#fff", fontSize: 16, fontWeight: "800" },
-  infoFinePrint: { fontSize: 12, lineHeight: 18, textAlign: "center" },
+  infoContactText: { color: "#fff", fontSize: 14, fontWeight: "800" },
+  infoFinePrint: { fontSize: 10.5, lineHeight: 14, textAlign: "center" },
 });
