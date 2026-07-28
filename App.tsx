@@ -803,6 +803,7 @@ export default function App() {
   const [themeName, setThemeName] = useState<ThemeName>("light");
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [infoSection, setInfoSection] = useState<string | null>("safety");
   const [itineraryOpen, setItineraryOpen] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [detailsFromItinerary, setDetailsFromItinerary] = useState(false);
@@ -1568,62 +1569,111 @@ export default function App() {
                     Plan mixed pub-and-sights routes, reorder stops and share
                     your trip.
                   </Text>
-                  <View
-                    style={[
-                      styles.infoNotice,
-                      {
-                        backgroundColor: colors.surface,
-                        borderColor: colors.border,
-                      },
-                    ]}
-                  >
-                    <Ionicons
-                      name="shield-checkmark"
-                      size={24}
-                      color={colors.primary}
-                    />
-                    <Text
-                      style={[styles.infoNoticeText, { color: colors.text }]}
-                    >
-                      Legal drinking age only. Drink responsibly; never drive or
-                      cycle while impaired.
-                    </Text>
-                  </View>
                   <Text style={[styles.sectionLabel, { color: colors.muted }]}>
-                    HELP & LEGAL
+                    QUICK INFORMATION
                   </Text>
                   <View
                     style={[styles.infoLinks, { borderColor: colors.border }]}
                   >
                     {[
-                      ["Help & support", "/support", "help-buoy-outline"],
-                      ["Privacy policy", "/privacy", "lock-closed-outline"],
-                      ["Terms of use", "/terms", "document-text-outline"],
-                      ["Safety guidance", "/safety", "heart-outline"],
-                      ["Your data", "/data-deletion", "trash-outline"],
-                    ].map(([label, path, icon]) => (
+                      [
+                        "help",
+                        "Help",
+                        "help-buoy-outline",
+                        "Choose start and finish points, select your travel mode and stops, then plan. Tap pins for venue details or open the itinerary to review and reorder stops.",
+                      ],
+                      [
+                        "safety",
+                        "Safety",
+                        "shield-checkmark-outline",
+                        "For people of legal drinking age. Drink responsibly, check venue and travel information, and never drive or cycle while impaired.",
+                      ],
+                      [
+                        "privacy",
+                        "Privacy summary",
+                        "lock-closed-outline",
+                        "No account is required. Route locations are shared with the services needed to build your trip, while app preferences remain on your device.",
+                      ],
+                    ].map(([key, label, icon, copy]) => {
+                      const expanded = infoSection === key;
+                      return (
+                        <View
+                          key={key}
+                          style={{
+                            borderBottomColor: colors.border,
+                            borderBottomWidth: 1,
+                          }}
+                        >
+                          <Pressable
+                            onPress={() =>
+                              setInfoSection(expanded ? null : key)
+                            }
+                            style={styles.infoLink}
+                          >
+                            <Ionicons
+                              name={icon as any}
+                              size={21}
+                              color={colors.primary}
+                            />
+                            <Text
+                              style={[
+                                styles.infoLinkText,
+                                { color: colors.text },
+                              ]}
+                            >
+                              {label}
+                            </Text>
+                            <Ionicons
+                              name={expanded ? "chevron-up" : "chevron-down"}
+                              size={18}
+                              color={colors.muted}
+                            />
+                          </Pressable>
+                          {expanded && (
+                            <Text
+                              style={[
+                                styles.infoSectionCopy,
+                                { color: colors.muted },
+                              ]}
+                            >
+                              {copy}
+                            </Text>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                  <Text style={[styles.sectionLabel, { color: colors.muted }]}>
+                    FULL POLICIES
+                  </Text>
+                  <View
+                    style={[
+                      styles.infoPolicyLinks,
+                      { borderColor: colors.border },
+                    ]}
+                  >
+                    {[
+                      ["Privacy", "/privacy"],
+                      ["Terms", "/terms"],
+                      ["Your data", "/data-deletion"],
+                    ].map(([label, path]) => (
                       <Pressable
                         key={path}
                         onPress={() => openSupportPage(path)}
-                        style={[
-                          styles.infoLink,
-                          { borderBottomColor: colors.border },
-                        ]}
+                        style={styles.infoPolicyLink}
                       >
-                        <Ionicons
-                          name={icon as any}
-                          size={21}
-                          color={colors.primary}
-                        />
                         <Text
-                          style={[styles.infoLinkText, { color: colors.text }]}
+                          style={[
+                            styles.infoPolicyText,
+                            { color: colors.primary },
+                          ]}
                         >
                           {label}
                         </Text>
                         <Ionicons
                           name="open-outline"
-                          size={18}
-                          color={colors.muted}
+                          size={15}
+                          color={colors.primary}
                         />
                       </Pressable>
                     ))}
@@ -2542,9 +2592,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 9,
     paddingHorizontal: 13,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   infoLinkText: { flex: 1, fontSize: 13, fontWeight: "700" },
+  infoSectionCopy: {
+    fontSize: 12,
+    lineHeight: 17,
+    paddingHorizontal: 13,
+    paddingLeft: 43,
+    paddingBottom: 12,
+  },
+  infoPolicyLinks: {
+    minHeight: 42,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+  },
+  infoPolicyLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 5,
+  },
+  infoPolicyText: { fontSize: 12, fontWeight: "800" },
   infoContact: {
     minHeight: 46,
     borderRadius: 999,
