@@ -53,6 +53,9 @@ const LONDON: Region = {
   longitudeDelta: 0.08,
 };
 const BLUE = "#4285f4";
+const SUPPORT_BASE_URL =
+  process.env.EXPO_PUBLIC_SUPPORT_URL ??
+  "https://d3pbhrkalr09t8.cloudfront.net";
 const SHARE_MAP_ASPECT = 1080 / 600;
 const modes: {
   value: TravelMode;
@@ -799,6 +802,7 @@ export default function App() {
   const shareImageLoadedRef = useRef<(() => void) | null>(null);
   const [themeName, setThemeName] = useState<ThemeName>("light");
   const [plannerOpen, setPlannerOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [itineraryOpen, setItineraryOpen] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [detailsFromItinerary, setDetailsFromItinerary] = useState(false);
@@ -816,6 +820,7 @@ export default function App() {
   const colors = themes[themeName];
   const plannerTranslateY = useRef(new Animated.Value(0)).current;
   const itineraryTranslateY = useRef(new Animated.Value(0)).current;
+  const infoTranslateY = useRef(new Animated.Value(0)).current;
   const detailTranslateX = useRef(new Animated.Value(420)).current;
 
   const dismissPlanner = () =>
@@ -898,6 +903,47 @@ export default function App() {
       }),
     [itineraryTranslateY],
   );
+
+  const closeInfo = () =>
+    Animated.timing(infoTranslateY, {
+      toValue: 800,
+      duration: 220,
+      useNativeDriver: true,
+    }).start(() => {
+      setInfoOpen(false);
+      infoTranslateY.setValue(0);
+    });
+  const infoPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
+        onMoveShouldSetPanResponderCapture: (_, gesture) =>
+          gesture.dy > 2 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          gesture.dy > 2 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onPanResponderMove: (_, gesture) =>
+          infoTranslateY.setValue(Math.max(0, gesture.dy)),
+        onPanResponderRelease: (_, gesture) => {
+          if (gesture.dy > 70 || gesture.vy > 0.65) closeInfo();
+          else
+            Animated.spring(infoTranslateY, {
+              toValue: 0,
+              damping: 18,
+              stiffness: 220,
+              useNativeDriver: true,
+            }).start();
+        },
+        onPanResponderTerminate: () =>
+          Animated.spring(infoTranslateY, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start(),
+      }),
+    [infoTranslateY],
+  );
+  const openSupportPage = (path: string) =>
+    Linking.openURL(`${SUPPORT_BASE_URL}/#${path}`);
 
   const openItineraryPlace = (place: Place) => {
     Haptics.selectionAsync();
@@ -1243,6 +1289,17 @@ export default function App() {
                 color={themeName === "light" ? "#475569" : "#fbbf24"}
               />
             </Pressable>
+            <Pressable
+              accessibilityLabel="About and support"
+              onPress={() => setInfoOpen(true)}
+              style={[styles.dockButton, { backgroundColor: colors.surface }]}
+            >
+              <Ionicons
+                name="information-circle-outline"
+                size={26}
+                color={colors.text}
+              />
+            </Pressable>
             {route && (
               <Pressable
                 accessibilityLabel="View itinerary"
@@ -1429,6 +1486,141 @@ export default function App() {
               </ScrollView>
             </Animated.View>
           </KeyboardAvoidingView>
+        </Modal>
+
+        <Modal
+          visible={infoOpen}
+          transparent
+          animationType="slide"
+          onRequestClose={closeInfo}
+        >
+          <View style={[styles.modalOverlay, styles.bottomModalOverlay]}>
+            <Pressable style={styles.modalDismiss} onPress={closeInfo} />
+            <SafeAreaView style={[styles.modalSafe, styles.bottomModalSafe]}>
+              <Animated.View
+                style={[
+                  styles.modalPanel,
+                  styles.bottomModalPanel,
+                  styles.itineraryPanel,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
+                    transform: [{ translateY: infoTranslateY }],
+                  },
+                ]}
+              >
+                <View
+                  style={styles.modalDragZone}
+                  {...infoPanResponder.panHandlers}
+                >
+                  <View style={styles.modalHandle} />
+                </View>
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={styles.infoContent}
+                >
+                  <View style={styles.infoBrand}>
+                    <Image
+                      source={require("./assets/tipsy-logo.png")}
+                      style={styles.infoLogo}
+                      resizeMode="contain"
+                    />
+                    <View style={{ flex: 1 }}>
+                      <RainbowTitle />
+                      <Text
+                        style={[styles.infoVersion, { color: colors.muted }]}
+                      >
+                        Version 1.0.0
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.infoIntro, { color: colors.text }]}>
+                    Plan a mixed pub-and-sights journey, explore each stop,
+                    reorder your itinerary and share the finished route.
+                  </Text>
+                  <View
+                    style={[
+                      styles.infoNotice,
+                      {
+                        backgroundColor: colors.surface,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="shield-checkmark"
+                      size={24}
+                      color={colors.primary}
+                    />
+                    <Text
+                      style={[styles.infoNoticeText, { color: colors.text }]}
+                    >
+                      For people of legal drinking age. Drink responsibly, never
+                      drink and drive, and do not cycle while impaired.
+                    </Text>
+                  </View>
+                  <Text style={[styles.sectionLabel, { color: colors.muted }]}>
+                    HELP & LEGAL
+                  </Text>
+                  <View
+                    style={[styles.infoLinks, { borderColor: colors.border }]}
+                  >
+                    {[
+                      ["Help & support", "/support", "help-buoy-outline"],
+                      ["Privacy policy", "/privacy", "lock-closed-outline"],
+                      ["Terms of use", "/terms", "document-text-outline"],
+                      ["Safety guidance", "/safety", "heart-outline"],
+                      ["Your data", "/data-deletion", "trash-outline"],
+                    ].map(([label, path, icon]) => (
+                      <Pressable
+                        key={path}
+                        onPress={() => openSupportPage(path)}
+                        style={[
+                          styles.infoLink,
+                          { borderBottomColor: colors.border },
+                        ]}
+                      >
+                        <Ionicons
+                          name={icon as any}
+                          size={21}
+                          color={colors.primary}
+                        />
+                        <Text
+                          style={[styles.infoLinkText, { color: colors.text }]}
+                        >
+                          {label}
+                        </Text>
+                        <Ionicons
+                          name="open-outline"
+                          size={18}
+                          color={colors.muted}
+                        />
+                      </Pressable>
+                    ))}
+                  </View>
+                  <Pressable
+                    onPress={() =>
+                      Linking.openURL(
+                        "mailto:info@ijrhservices.co.uk?subject=Tipsy%20Tourist%20support",
+                      )
+                    }
+                    style={[
+                      styles.infoContact,
+                      { backgroundColor: colors.primary },
+                    ]}
+                  >
+                    <Ionicons name="mail-outline" size={20} color="#fff" />
+                    <Text style={styles.infoContactText}>Contact support</Text>
+                  </Pressable>
+                  <Text style={[styles.infoFinePrint, { color: colors.muted }]}>
+                    Maps, directions and place information are provided using
+                    Google Maps services and may change. Always check venue
+                    details and local conditions.
+                  </Text>
+                </ScrollView>
+              </Animated.View>
+            </SafeAreaView>
+          </View>
         </Modal>
 
         <Modal
@@ -2296,4 +2488,42 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 4,
   },
+  infoContent: {
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === "ios" ? 44 : 28,
+    gap: 16,
+  },
+  infoBrand: { flexDirection: "row", alignItems: "center", gap: 14 },
+  infoLogo: { width: 68, height: 68 },
+  infoVersion: { fontSize: 12, marginTop: 2 },
+  infoIntro: { fontSize: 17, lineHeight: 25, fontWeight: "600" },
+  infoNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 11,
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 15,
+  },
+  infoNoticeText: { flex: 1, fontSize: 14, lineHeight: 20 },
+  infoLinks: { borderWidth: 1, borderRadius: 24, overflow: "hidden" },
+  infoLink: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  infoLinkText: { flex: 1, fontSize: 15, fontWeight: "700" },
+  infoContact: {
+    minHeight: 54,
+    borderRadius: 999,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 9,
+  },
+  infoContactText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+  infoFinePrint: { fontSize: 12, lineHeight: 18, textAlign: "center" },
 });

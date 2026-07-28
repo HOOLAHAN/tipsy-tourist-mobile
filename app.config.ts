@@ -16,6 +16,7 @@ export default {
       supportsTablet: true,
       bundleIdentifier: "com.tipsytourist.mobile",
       infoPlist: {
+        ITSAppUsesNonExemptEncryption: false,
         NSLocationWhenInUseUsageDescription:
           "Tipsy Tourist uses your location to start and centre pub crawl routes.",
       },
