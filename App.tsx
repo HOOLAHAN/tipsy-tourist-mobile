@@ -117,6 +117,24 @@ function shareMapRegion(route: RoutePlan): Region {
   };
 }
 
+function sharePinPosition(
+  coordinate: { latitude: number; longitude: number },
+  region: Region,
+) {
+  const left =
+    ((coordinate.longitude - (region.longitude - region.longitudeDelta / 2)) /
+      region.longitudeDelta) *
+    100;
+  const top =
+    ((region.latitude + region.latitudeDelta / 2 - coordinate.latitude) /
+      region.latitudeDelta) *
+    100;
+  return {
+    left: `${Math.max(0, Math.min(100, left))}%` as const,
+    top: `${Math.max(0, Math.min(100, top))}%` as const,
+  };
+}
+
 function AutocompleteInput({
   value,
   onChange,
@@ -649,6 +667,25 @@ const ShareCard = forwardRef<
   { route, start, finish, travelLabel, mapUri, onMapLoaded },
   ref,
 ) {
+  const exportRegion = shareMapRegion(route);
+  const mapPins = [
+    { key: "start", coordinate: route.origin, label: "S", color: "#2563eb" },
+    ...route.stops.map((place, index) => ({
+      key: place.place_id,
+      coordinate: {
+        latitude: place.geometry.location.lat,
+        longitude: place.geometry.location.lng,
+      },
+      label: String(index + 1),
+      color: place.stopType === "pub" ? "#e11d48" : "#7c3aed",
+    })),
+    {
+      key: "finish",
+      coordinate: route.destination,
+      label: "F",
+      color: "#16a34a",
+    },
+  ];
   return (
     <View ref={ref} collapsable={false} style={styles.shareCard}>
       <View style={styles.shareBrandRow}>
@@ -672,12 +709,32 @@ const ShareCard = forwardRef<
           {travelLabel.toUpperCase()}
         </Text>
       </View>
-      <Image
-        source={{ uri: mapUri }}
-        onLoad={onMapLoaded}
-        style={styles.shareMap}
-        resizeMode="cover"
-      />
+      <View style={styles.shareMapFrame}>
+        <Image
+          source={{ uri: mapUri }}
+          onLoad={onMapLoaded}
+          style={styles.shareMap}
+          resizeMode="cover"
+        />
+        {mapPins.map((pin) => (
+          <View
+            key={pin.key}
+            style={[
+              styles.shareMapPin,
+              sharePinPosition(pin.coordinate, exportRegion),
+            ]}
+          >
+            <View
+              style={[styles.shareMapPinHead, { backgroundColor: pin.color }]}
+            >
+              <Text style={styles.shareMapPinLabel}>{pin.label}</Text>
+            </View>
+            <View
+              style={[styles.shareMapPinTip, { borderTopColor: pin.color }]}
+            />
+          </View>
+        ))}
+      </View>
       <View style={styles.shareEndpoints}>
         <View style={[styles.shareEndpointDot, { backgroundColor: "#2563eb" }]}>
           <Text style={styles.shareEndpointLetter}>S</Text>
@@ -754,6 +811,7 @@ export default function App() {
   const [route, setRoute] = useState<RoutePlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [capturingShareMap, setCapturingShareMap] = useState(false);
   const [shareMapUri, setShareMapUri] = useState<string | null>(null);
   const colors = themes[themeName];
   const plannerTranslateY = useRef(new Animated.Value(0)).current;
@@ -983,14 +1041,21 @@ export default function App() {
       const exportRegion = shareMapRegion(route);
       mapRef.current.animateToRegion(exportRegion, 0);
       await new Promise((resolve) => setTimeout(resolve, 250));
-      const mapUri = await mapRef.current.takeSnapshot({
-        width: 1080,
-        height: 600,
-        region: exportRegion,
-        format: "png",
-        quality: 1,
-        result: "file",
-      });
+      setCapturingShareMap(true);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      let mapUri: string;
+      try {
+        mapUri = await mapRef.current.takeSnapshot({
+          width: 1080,
+          height: 600,
+          region: exportRegion,
+          format: "png",
+          quality: 1,
+          result: "file",
+        });
+      } finally {
+        setCapturingShareMap(false);
+      }
       const mapLoaded = new Promise<void>((resolve) => {
         shareImageLoadedRef.current = resolve;
       });
@@ -1045,39 +1110,43 @@ export default function App() {
                 strokeColor={colors.primary}
                 strokeWidth={6}
               />
-              <Marker
-                coordinate={route.origin}
-                title="Start"
-                anchor={{ x: 0.5, y: 1 }}
-                zIndex={20}
-              >
-                <RoutePin label="S" color="#2563eb" />
-              </Marker>
-              {route.stops.map((place, index) => (
-                <Marker
-                  key={place.place_id}
-                  coordinate={{
-                    latitude: place.geometry.location.lat,
-                    longitude: place.geometry.location.lng,
-                  }}
-                  anchor={{ x: 0.5, y: 1 }}
-                  zIndex={10 + index}
-                  onPress={() => openItineraryPlace(place)}
-                >
-                  <RoutePin
-                    label={String(index + 1)}
-                    color={place.stopType === "pub" ? "#e11d48" : "#7c3aed"}
-                  />
-                </Marker>
-              ))}
-              <Marker
-                coordinate={route.destination}
-                title="Finish"
-                anchor={{ x: 0.5, y: 1 }}
-                zIndex={20}
-              >
-                <RoutePin label="F" color="#16a34a" />
-              </Marker>
+              {!capturingShareMap && (
+                <>
+                  <Marker
+                    coordinate={route.origin}
+                    title="Start"
+                    anchor={{ x: 0.5, y: 1 }}
+                    zIndex={20}
+                  >
+                    <RoutePin label="S" color="#2563eb" />
+                  </Marker>
+                  {route.stops.map((place, index) => (
+                    <Marker
+                      key={place.place_id}
+                      coordinate={{
+                        latitude: place.geometry.location.lat,
+                        longitude: place.geometry.location.lng,
+                      }}
+                      anchor={{ x: 0.5, y: 1 }}
+                      zIndex={10 + index}
+                      onPress={() => openItineraryPlace(place)}
+                    >
+                      <RoutePin
+                        label={String(index + 1)}
+                        color={place.stopType === "pub" ? "#e11d48" : "#7c3aed"}
+                      />
+                    </Marker>
+                  ))}
+                  <Marker
+                    coordinate={route.destination}
+                    title="Finish"
+                    anchor={{ x: 0.5, y: 1 }}
+                    zIndex={20}
+                  >
+                    <RoutePin label="F" color="#16a34a" />
+                  </Marker>
+                </>
+              )}
             </>
           )}
         </MapView>
@@ -2140,11 +2209,40 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   shareMode: { color: "#ffffff", backgroundColor: BLUE },
-  shareMap: {
+  shareMapFrame: {
     width: "100%",
     height: 194,
     borderRadius: 16,
+    overflow: "hidden",
     backgroundColor: "#e2e8f0",
+  },
+  shareMap: { width: "100%", height: "100%" },
+  shareMapPin: {
+    position: "absolute",
+    width: 22,
+    height: 28,
+    marginLeft: -11,
+    marginTop: -25,
+    alignItems: "center",
+  },
+  shareMapPinHead: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: "#ffffff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  shareMapPinLabel: { color: "#ffffff", fontSize: 8, fontWeight: "900" },
+  shareMapPinTip: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 4,
+    borderRightWidth: 4,
+    borderTopWidth: 7,
+    borderLeftColor: "transparent",
+    borderRightColor: "transparent",
   },
   shareEndpoints: {
     flexDirection: "row",
