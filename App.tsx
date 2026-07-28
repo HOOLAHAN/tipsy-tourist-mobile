@@ -921,13 +921,9 @@ const ShareCard = forwardRef<
             ]}
           >
             <View
-              style={[styles.shareMapPinHead, { backgroundColor: pin.color }]}
-            >
-              <Text style={styles.shareMapPinLabel}>{pin.label}</Text>
-            </View>
-            <View
-              style={[styles.shareMapPinTip, { borderTopColor: pin.color }]}
+              style={[styles.shareMapPinShape, { backgroundColor: pin.color }]}
             />
+            <Text style={styles.shareMapPinLabel}>{pin.label}</Text>
           </View>
         ))}
       </View>
@@ -2818,30 +2814,36 @@ const styles = StyleSheet.create({
   shareMap: { width: "100%", height: "100%" },
   shareMapPin: {
     position: "absolute",
-    width: 18,
-    height: 24,
-    marginLeft: -9,
-    marginTop: -24,
+    width: 26,
+    height: 31,
+    marginLeft: -13,
+    marginTop: -27,
     alignItems: "center",
+    justifyContent: "flex-start",
   },
-  shareMapPinHead: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 1.25,
+  shareMapPinShape: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderBottomRightRadius: 3,
+    borderWidth: 1.5,
     borderColor: "#ffffff",
-    alignItems: "center",
-    justifyContent: "center",
+    transform: [{ rotate: "45deg" }],
+    shadowColor: "#000000",
+    shadowOpacity: 0.22,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
   },
-  shareMapPinLabel: { color: "#ffffff", fontSize: 7, fontWeight: "900" },
-  shareMapPinTip: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 3.5,
-    borderRightWidth: 3.5,
-    borderTopWidth: 6,
-    borderLeftColor: "transparent",
-    borderRightColor: "transparent",
+  shareMapPinLabel: {
+    position: "absolute",
+    top: 4,
+    left: 0,
+    right: 0,
+    color: "#ffffff",
+    fontSize: 8,
+    fontWeight: "900",
+    textAlign: "center",
   },
   shareEndpoints: {
     flexDirection: "row",
