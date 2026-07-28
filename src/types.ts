@@ -16,6 +16,7 @@ export type Place = {
 };
 
 export type PlaceDetails = {
+  place_id?: string;
   name?: string;
   formatted_address?: string;
   formatted_phone_number?: string;
@@ -25,6 +26,16 @@ export type PlaceDetails = {
   opening_hours?: { open_now?: boolean; weekday_text?: string[] };
   photos?: { photo_reference: string }[];
   vicinity?: string;
+  price_level?: number;
+  url?: string;
+  editorial_summary?: { overview?: string };
+  wheelchair_accessible_entrance?: boolean;
+  reviews?: {
+    author_name?: string;
+    rating?: number;
+    relative_time_description?: string;
+    text?: string;
+  }[];
 };
 
 export type PlaceSuggestion = {

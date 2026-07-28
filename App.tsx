@@ -317,8 +317,18 @@ function DetailRows({
   details: PlaceDetails;
   colors: (typeof themes)[ThemeName];
 }) {
+  const [showHours, setShowHours] = useState(false);
+  const [showReviews, setShowReviews] = useState(false);
   const today = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
   const hours = details.opening_hours?.weekday_text?.[today];
+  const mapsUrl =
+    details.url ??
+    (details.place_id
+      ? `https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(details.place_id)}&query=${encodeURIComponent(details.name ?? "Place")}`
+      : undefined);
+  const directionsUrl = details.place_id
+    ? `https://www.google.com/maps/dir/?api=1&destination_place_id=${encodeURIComponent(details.place_id)}&destination=${encodeURIComponent(details.name ?? "Place")}`
+    : undefined;
   return (
     <View style={styles.detailRows}>
       <View style={styles.detailRow}>
@@ -329,6 +339,14 @@ function DetailRows({
             "Address unavailable"}
         </Text>
       </View>
+      {details.price_level !== undefined && (
+        <View style={styles.detailRow}>
+          <Ionicons name="cash-outline" size={23} color={colors.text} />
+          <Text style={[styles.detailText, { color: colors.text }]}>
+            Price level {"£".repeat(Math.max(1, details.price_level))}
+          </Text>
+        </View>
+      )}
       {details.formatted_phone_number && (
         <Pressable
           style={styles.detailRow}
@@ -397,6 +415,128 @@ function DetailRows({
             : "No opening hours info"}
         </Text>
       </View>
+      {!!details.opening_hours?.weekday_text?.length && (
+        <>
+          <Pressable
+            style={styles.detailDisclosure}
+            onPress={() => setShowHours((value) => !value)}
+          >
+            <Text
+              style={[styles.detailDisclosureText, { color: colors.primary }]}
+            >
+              {showHours ? "Hide weekly hours" : "View weekly hours"}
+            </Text>
+            <Ionicons
+              name={showHours ? "chevron-up" : "chevron-down"}
+              size={17}
+              color={colors.primary}
+            />
+          </Pressable>
+          {showHours && (
+            <View
+              style={[styles.detailInset, { backgroundColor: colors.card }]}
+            >
+              {details.opening_hours.weekday_text.map((line) => (
+                <Text
+                  key={line}
+                  style={[styles.detailInsetText, { color: colors.text }]}
+                >
+                  {line}
+                </Text>
+              ))}
+            </View>
+          )}
+        </>
+      )}
+      {details.editorial_summary?.overview && (
+        <Text style={[styles.detailDescription, { color: colors.muted }]}>
+          {details.editorial_summary.overview}
+        </Text>
+      )}
+      {details.wheelchair_accessible_entrance !== undefined && (
+        <View style={styles.detailRow}>
+          <MaterialCommunityIcons
+            name="wheelchair-accessibility"
+            size={23}
+            color={colors.text}
+          />
+          <Text style={[styles.detailText, { color: colors.text }]}>
+            {details.wheelchair_accessible_entrance
+              ? "Wheelchair-accessible entrance"
+              : "Entrance not marked as wheelchair accessible"}
+          </Text>
+        </View>
+      )}
+      {(mapsUrl || directionsUrl) && (
+        <View style={styles.mapActionRow}>
+          {mapsUrl && (
+            <Pressable
+              style={[styles.mapAction, { backgroundColor: colors.card }]}
+              onPress={() => Linking.openURL(mapsUrl)}
+            >
+              <Ionicons name="map-outline" size={18} color={colors.primary} />
+              <Text style={[styles.mapActionText, { color: colors.primary }]}>
+                Open in Maps
+              </Text>
+            </Pressable>
+          )}
+          {directionsUrl && (
+            <Pressable
+              style={[styles.mapAction, { backgroundColor: colors.primary }]}
+              onPress={() => Linking.openURL(directionsUrl)}
+            >
+              <Ionicons name="navigate-outline" size={18} color="#fff" />
+              <Text style={[styles.mapActionText, { color: "#fff" }]}>
+                Directions
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+      {!!details.reviews?.length && (
+        <>
+          <Pressable
+            style={styles.detailDisclosure}
+            onPress={() => setShowReviews((value) => !value)}
+          >
+            <Text
+              style={[styles.detailDisclosureText, { color: colors.primary }]}
+            >
+              {showReviews
+                ? "Hide reviews"
+                : `Recent reviews (${Math.min(2, details.reviews.length)})`}
+            </Text>
+            <Ionicons
+              name={showReviews ? "chevron-up" : "chevron-down"}
+              size={17}
+              color={colors.primary}
+            />
+          </Pressable>
+          {showReviews &&
+            details.reviews.slice(0, 2).map((review, index) => (
+              <View
+                key={`${review.author_name}-${index}`}
+                style={[styles.reviewCard, { backgroundColor: colors.card }]}
+              >
+                <View style={styles.reviewHeading}>
+                  <Text style={[styles.reviewAuthor, { color: colors.text }]}>
+                    {review.author_name ?? "Google user"}
+                  </Text>
+                  <Text style={[styles.reviewMeta, { color: colors.muted }]}>
+                    {review.rating ? `★ ${review.rating}` : ""}{" "}
+                    {review.relative_time_description}
+                  </Text>
+                </View>
+                <Text
+                  style={[styles.reviewText, { color: colors.muted }]}
+                  numberOfLines={4}
+                >
+                  {review.text}
+                </Text>
+              </View>
+            ))}
+        </>
+      )}
     </View>
   );
 }
@@ -2595,6 +2735,39 @@ const styles = StyleSheet.create({
   detailRow: { flexDirection: "row", alignItems: "center", gap: 11 },
   detailText: { flex: 1, fontSize: 16, lineHeight: 22 },
   detailLink: { flex: 1, fontSize: 16, lineHeight: 22 },
+  detailDisclosure: {
+    minHeight: 38,
+    borderRadius: 999,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  detailDisclosureText: { fontSize: 13, fontWeight: "800" },
+  detailInset: { borderRadius: 16, padding: 12, gap: 5 },
+  detailInsetText: { fontSize: 12, lineHeight: 17 },
+  detailDescription: { fontSize: 14, lineHeight: 20 },
+  mapActionRow: { flexDirection: "row", gap: 8 },
+  mapAction: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 999,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  mapActionText: { fontSize: 12, fontWeight: "800" },
+  reviewCard: { borderRadius: 16, padding: 12, gap: 6 },
+  reviewHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  reviewAuthor: { flex: 1, fontSize: 13, fontWeight: "800" },
+  reviewMeta: { fontSize: 11 },
+  reviewText: { fontSize: 12, lineHeight: 17 },
   shareButton: {
     width: 42,
     height: 42,
