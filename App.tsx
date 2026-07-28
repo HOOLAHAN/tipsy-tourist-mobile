@@ -53,6 +53,7 @@ const LONDON: Region = {
   longitudeDelta: 0.08,
 };
 const BLUE = "#4285f4";
+const SHARE_MAP_ASPECT = 1080 / 600;
 const modes: {
   value: TravelMode;
   label: string;
@@ -87,6 +88,33 @@ function RoutePin({ label, color }: { label: string; color: string }) {
       <Text style={styles.pinLabel}>{label}</Text>
     </View>
   );
+}
+
+function shareMapRegion(route: RoutePlan): Region {
+  const points = [route.origin, ...route.coordinates, route.destination];
+  const latitudes = points.map((point) => point.latitude);
+  const longitudes = points.map((point) => point.longitude);
+  const minLatitude = Math.min(...latitudes);
+  const maxLatitude = Math.max(...latitudes);
+  const minLongitude = Math.min(...longitudes);
+  const maxLongitude = Math.max(...longitudes);
+  const latitude = (minLatitude + maxLatitude) / 2;
+  const longitude = (minLongitude + maxLongitude) / 2;
+  const latitudeSpan = Math.max(maxLatitude - minLatitude, 0.002);
+  const longitudeSpan = Math.max(maxLongitude - minLongitude, 0.002);
+  const latitudeCosine = Math.max(Math.cos((latitude * Math.PI) / 180), 0.2);
+  const projectedLongitudeSpan = longitudeSpan * latitudeCosine;
+  // The limiting axis occupies 80% of the landscape export, leaving 10% each side.
+  const latitudeDelta = Math.max(
+    latitudeSpan / 0.8,
+    projectedLongitudeSpan / (SHARE_MAP_ASPECT * 0.8),
+  );
+  return {
+    latitude,
+    longitude,
+    latitudeDelta,
+    longitudeDelta: (latitudeDelta * SHARE_MAP_ASPECT) / latitudeCosine,
+  };
 }
 
 function AutocompleteInput({
@@ -952,14 +980,13 @@ export default function App() {
     try {
       if (!(await Sharing.isAvailableAsync()))
         throw new Error("Sharing is not available on this device.");
-      mapRef.current.fitToCoordinates(route.coordinates, {
-        edgePadding: { top: 110, right: 45, bottom: 110, left: 45 },
-        animated: false,
-      });
+      const exportRegion = shareMapRegion(route);
+      mapRef.current.animateToRegion(exportRegion, 0);
       await new Promise((resolve) => setTimeout(resolve, 250));
       const mapUri = await mapRef.current.takeSnapshot({
         width: 1080,
         height: 600,
+        region: exportRegion,
         format: "png",
         quality: 1,
         result: "file",
@@ -1621,6 +1648,7 @@ const styles = StyleSheet.create({
   },
   sheetClear: {
     minHeight: 42,
+    borderRadius: 999,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -1802,7 +1830,7 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     minHeight: 54,
-    borderRadius: 14,
+    borderRadius: 999,
     paddingHorizontal: 16,
     fontSize: 17,
   },
@@ -1810,7 +1838,7 @@ const styles = StyleSheet.create({
     width: 52,
     minHeight: 54,
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1841,7 +1869,7 @@ const styles = StyleSheet.create({
   modeRow: {
     flexDirection: "row",
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 999,
     padding: 4,
     gap: 4,
   },
@@ -1853,7 +1881,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 0,
-    borderRadius: 11,
+    borderRadius: 999,
   },
   modeButtonSelected: { backgroundColor: BLUE },
   modeLabel: { fontSize: 16, fontWeight: "600" },
@@ -1861,7 +1889,7 @@ const styles = StyleSheet.create({
   stopCounter: {
     flex: 1,
     borderWidth: 1,
-    borderRadius: 16,
+    borderRadius: 26,
     padding: 11,
     minHeight: 136,
   },
@@ -1889,14 +1917,14 @@ const styles = StyleSheet.create({
     minWidth: 46,
     height: 46,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
   },
   counterNumber: { fontSize: 20, fontWeight: "700" },
   primaryButton: {
     minHeight: 54,
-    borderRadius: 15,
+    borderRadius: 999,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -1911,7 +1939,7 @@ const styles = StyleSheet.create({
   warning: {
     backgroundColor: "#ffedc9",
     padding: 13,
-    borderRadius: 14,
+    borderRadius: 24,
     flexDirection: "row",
     alignItems: "center",
     gap: 9,
@@ -2092,8 +2120,8 @@ const styles = StyleSheet.create({
     paddingTop: 22,
     paddingBottom: 18,
   },
-  shareBrandRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  shareLogo: { width: 54, height: 54 },
+  shareBrandRow: { flexDirection: "row", alignItems: "center", gap: 16 },
+  shareLogo: { width: 78, height: 78 },
   shareStrapline: { color: "#64748b", fontSize: 12, marginTop: 1 },
   shareStats: {
     flexDirection: "row",
