@@ -33,6 +33,7 @@ import { captureRef } from "react-native-view-shot";
 import {
   getPlaceDetails,
   getPlacePhotoUrl,
+  getGoogleMapsRequestHeaders,
   getPlaceSuggestions,
   findReplacementStop,
   planRoute,
@@ -654,7 +655,7 @@ function PlaceCard({
         <>
           {photo && (
             <Image
-              source={{ uri: photo }}
+              source={{ uri: photo, headers: getGoogleMapsRequestHeaders() }}
               style={styles.placeImage}
               resizeMode="cover"
             />

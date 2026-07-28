@@ -1,4 +1,5 @@
 import polyline from "@mapbox/polyline";
+import { Platform } from "react-native";
 import {
   Coordinate,
   Place,
@@ -16,6 +17,14 @@ const production =
 const MAPS_KEY = production
   ? process.env.EXPO_PUBLIC_TIPSY_TOURIST_MOBILE_SERVICES_PRODUCTION
   : process.env.EXPO_PUBLIC_TIPSY_TOURIST_MOBILE_SERVICES_DEVELOPMENT;
+const GOOGLE_MAPS_HEADERS =
+  Platform.OS === "ios"
+    ? { "X-Ios-Bundle-Identifier": "com.tipsytourist.mobile" }
+    : undefined;
+
+export function getGoogleMapsRequestHeaders() {
+  return GOOGLE_MAPS_HEADERS;
+}
 
 async function post<T>(path: string, body: object): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
@@ -175,6 +184,7 @@ export async function getPlaceSuggestions(
   });
   const response = await fetch(
     `https://maps.googleapis.com/maps/api/place/autocomplete/json?${query}`,
+    { headers: GOOGLE_MAPS_HEADERS },
   );
   const data = await response.json();
   if (data.status !== "OK" && data.status !== "ZERO_RESULTS") return [];
@@ -218,6 +228,7 @@ export async function routeThroughStops(
   if (waypoints) query.set("waypoints", waypoints);
   const response = await fetch(
     `https://maps.googleapis.com/maps/api/directions/json?${query}`,
+    { headers: GOOGLE_MAPS_HEADERS },
   );
   const data = await response.json();
   if (data.status !== "OK")
