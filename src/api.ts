@@ -285,3 +285,25 @@ export async function planRoute(
     );
   return routeThroughStops(origin, destination, stops, mode);
 }
+
+export async function findReplacementStop(
+  stop: Place,
+  excludedPlaceIds: string[],
+): Promise<Place> {
+  const point = {
+    latitude: stop.geometry.location.lat,
+    longitude: stop.geometry.location.lng,
+  };
+  const candidates = await nearbyCandidates(
+    stop.stopType === "pub" ? "/places" : "/attractions",
+    point,
+    stop.stopType,
+  );
+  const excluded = new Set(excludedPlaceIds);
+  const replacement = candidates.find(
+    (candidate) => !excluded.has(candidate.place_id),
+  );
+  if (!replacement)
+    throw new Error(`No different ${stop.stopType} was found nearby.`);
+  return replacement;
+}

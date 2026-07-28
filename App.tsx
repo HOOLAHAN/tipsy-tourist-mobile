@@ -34,6 +34,7 @@ import {
   getPlaceDetails,
   getPlacePhotoUrl,
   getPlaceSuggestions,
+  findReplacementStop,
   planRoute,
   routeThroughStops,
 } from "./src/api";
@@ -407,6 +408,9 @@ function PlaceCard({
   canMoveUp,
   canMoveDown,
   onMove,
+  onRemove,
+  onRegenerate,
+  updating,
 }: {
   place: Place;
   index: number;
@@ -414,6 +418,9 @@ function PlaceCard({
   canMoveUp?: boolean;
   canMoveDown?: boolean;
   onMove?: (amount: number) => void;
+  onRemove?: () => void;
+  onRegenerate?: () => void;
+  updating?: boolean;
 }) {
   const [details, setDetails] = useState<PlaceDetails | null>(null);
   useEffect(() => {
@@ -477,6 +484,30 @@ function PlaceCard({
           </Pressable>
         </View>
       )}
+      {(onRemove || onRegenerate) && (
+        <View style={styles.stopActionBar}>
+          <Pressable
+            disabled={updating}
+            onPress={onRegenerate}
+            style={[styles.stopActionButton, { backgroundColor: colors.card }]}
+          >
+            <Ionicons name="refresh" size={18} color={colors.primary} />
+            <Text style={[styles.stopActionText, { color: colors.primary }]}>
+              {updating ? "Replacing…" : "Replace stop"}
+            </Text>
+          </Pressable>
+          <Pressable
+            disabled={updating}
+            onPress={onRemove}
+            style={[styles.stopActionButton, { backgroundColor: colors.card }]}
+          >
+            <Ionicons name="trash-outline" size={18} color="#e11d48" />
+            <Text style={[styles.stopActionText, { color: "#e11d48" }]}>
+              Remove
+            </Text>
+          </Pressable>
+        </View>
+      )}
       {!details ? (
         <ActivityIndicator style={{ margin: 30 }} color={BLUE} />
       ) : (
@@ -504,6 +535,9 @@ function ItineraryRow({
   onOpen,
   onDrop,
   onDragChange,
+  onRemove,
+  onRegenerate,
+  updating,
 }: {
   place: Place;
   index: number;
@@ -513,6 +547,9 @@ function ItineraryRow({
   onOpen: () => void;
   onDrop: (from: number, to: number) => void;
   onDragChange: (dragging: boolean) => void;
+  onRemove: () => void;
+  onRegenerate: () => void;
+  updating?: boolean;
 }) {
   const stopColor = place.stopType === "pub" ? "#e11d48" : "#7c3aed";
   const translateY = useRef(new Animated.Value(0)).current;
@@ -646,11 +683,27 @@ function ItineraryRow({
               : (place.vicinity ?? "Tap for place details")}
           </Text>
         </View>
-        <MaterialCommunityIcons
-          name={dragging ? "drag-vertical" : "gesture-tap-hold"}
-          size={22}
-          color={dragging ? colors.primary : colors.muted}
-        />
+        <View style={styles.rowActions}>
+          <Pressable
+            disabled={updating}
+            onPress={onRegenerate}
+            style={styles.rowAction}
+          >
+            <Ionicons name="refresh" size={18} color={colors.primary} />
+          </Pressable>
+          <Pressable
+            disabled={updating}
+            onPress={onRemove}
+            style={styles.rowAction}
+          >
+            <Ionicons name="trash-outline" size={18} color="#e11d48" />
+          </Pressable>
+          <MaterialCommunityIcons
+            name={dragging ? "drag-vertical" : "gesture-tap-hold"}
+            size={21}
+            color={dragging ? colors.primary : colors.muted}
+          />
+        </View>
       </Pressable>
     </Animated.View>
   );
@@ -816,6 +869,7 @@ export default function App() {
   const [route, setRoute] = useState<RoutePlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [updatingStopId, setUpdatingStopId] = useState<string | null>(null);
   const [capturingShareMap, setCapturingShareMap] = useState(false);
   const [shareMapUri, setShareMapUri] = useState<string | null>(null);
   const colors = themes[themeName];
@@ -1103,6 +1157,85 @@ export default function App() {
         "Could not update route",
         error instanceof Error ? error.message : "Please try again.",
       );
+    }
+  };
+  const applyStops = async (stops: Place[], previous: RoutePlan) => {
+    const stopOrder = stops.map((place) => place.place_id).join("|");
+    setRoute({ ...previous, stops });
+    try {
+      const updated = await routeThroughStops(
+        previous.origin,
+        previous.destination,
+        stops,
+        mode,
+      );
+      setRoute((current) =>
+        current?.stops.map((place) => place.place_id).join("|") === stopOrder
+          ? updated
+          : current,
+      );
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return true;
+    } catch (error) {
+      setRoute((current) =>
+        current?.stops.map((place) => place.place_id).join("|") === stopOrder
+          ? previous
+          : current,
+      );
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        "Could not update route",
+        error instanceof Error ? error.message : "Please try again.",
+      );
+      return false;
+    }
+  };
+  const removeStop = (place: Place) => {
+    if (!route || updatingStopId) return;
+    Alert.alert(
+      "Remove this stop?",
+      `${place.name} will be removed and the route recalculated.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            setUpdatingStopId(place.place_id);
+            const succeeded = await applyStops(
+              route.stops.filter((item) => item.place_id !== place.place_id),
+              route,
+            );
+            setUpdatingStopId(null);
+            if (succeeded && selectedPlace?.place_id === place.place_id)
+              closeItineraryPlace();
+          },
+        },
+      ],
+    );
+  };
+  const regenerateStop = async (place: Place) => {
+    if (!route || updatingStopId) return;
+    setUpdatingStopId(place.place_id);
+    try {
+      const replacement = await findReplacementStop(
+        place,
+        route.stops.map((item) => item.place_id),
+      );
+      const stops = route.stops.map((item) =>
+        item.place_id === place.place_id ? replacement : item,
+      );
+      const succeeded = await applyStops(stops, route);
+      if (succeeded && selectedPlace?.place_id === place.place_id)
+        setSelectedPlace(replacement);
+    } catch (error) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        "Could not replace stop",
+        error instanceof Error ? error.message : "Please try again.",
+      );
+    } finally {
+      setUpdatingStopId(null);
     }
   };
   const travelLabel = mode === "bicycling" ? "cycling" : mode;
@@ -1787,6 +1920,9 @@ export default function App() {
                           ) ?? 0
                         }
                         colors={colors}
+                        updating={updatingStopId === selectedPlace.place_id}
+                        onRegenerate={() => regenerateStop(selectedPlace)}
+                        onRemove={() => removeStop(selectedPlace)}
                       />
                     </ScrollView>
                   </Animated.View>
@@ -1892,6 +2028,9 @@ export default function App() {
                           onDrop={(from, to) => moveStop(from, to - from)}
                           onDragChange={setIsReordering}
                           onOpen={() => openItineraryPlace(place)}
+                          updating={updatingStopId === place.place_id}
+                          onRegenerate={() => regenerateStop(place)}
+                          onRemove={() => removeStop(place)}
                         />
                       ))}
                     </ScrollView>
@@ -2084,6 +2223,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  stopActionBar: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  stopActionButton: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 999,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  stopActionText: { fontSize: 12, fontWeight: "800" },
   draggingRow: { zIndex: 50 },
   itineraryCardDragging: {
     shadowColor: "#000",
