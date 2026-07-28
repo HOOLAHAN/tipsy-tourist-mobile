@@ -2223,7 +2223,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  stopActionBar: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  stopActionBar: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 12,
+    marginBottom: 12,
+  },
   stopActionButton: {
     flex: 1,
     minHeight: 42,
