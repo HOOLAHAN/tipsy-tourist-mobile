@@ -100,6 +100,22 @@ function RoutePin({ label, color }: { label: string; color: string }) {
   );
 }
 
+function SummaryChip({
+  label,
+  backgroundColor,
+  color,
+}: {
+  label: string;
+  backgroundColor: string;
+  color: string;
+}) {
+  return (
+    <View style={[styles.summaryChip, { backgroundColor }]}>
+      <Text style={[styles.summaryChipText, { color }]}>{label}</Text>
+    </View>
+  );
+}
+
 function shareMapRegion(route: RoutePlan): Region {
   const points = [route.origin, ...route.coordinates, route.destination];
   const latitudes = points.map((point) => point.latitude);
@@ -2211,47 +2227,26 @@ function AppContent() {
                       </View>
                     </View>
                     <View style={styles.summaryChips}>
-                      <Text
-                        style={[
-                          styles.summaryChip,
-                          {
-                            backgroundColor: colors.surface,
-                            color: colors.text,
-                          },
-                        ]}
-                      >
-                        {route?.stops.length ?? 0} STOPS
-                      </Text>
-                      <Text
-                        style={[
-                          styles.summaryChip,
-                          {
-                            backgroundColor: colors.surface,
-                            color: colors.text,
-                          },
-                        ]}
-                      >
-                        {route?.distance.toUpperCase()}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.summaryChip,
-                          {
-                            backgroundColor: colors.surface,
-                            color: colors.text,
-                          },
-                        ]}
-                      >
-                        {route?.duration.toUpperCase()}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.summaryChip,
-                          { backgroundColor: colors.primary, color: "#fff" },
-                        ]}
-                      >
-                        {travelLabel.toUpperCase()}
-                      </Text>
+                      <SummaryChip
+                        label={`${route?.stops.length ?? 0} STOPS`}
+                        backgroundColor={colors.surface}
+                        color={colors.text}
+                      />
+                      <SummaryChip
+                        label={route?.distance.toUpperCase() ?? ""}
+                        backgroundColor={colors.surface}
+                        color={colors.text}
+                      />
+                      <SummaryChip
+                        label={route?.duration.toUpperCase() ?? ""}
+                        backgroundColor={colors.surface}
+                        color={colors.text}
+                      />
+                      <SummaryChip
+                        label={travelLabel.toUpperCase()}
+                        backgroundColor={colors.primary}
+                        color="#fff"
+                      />
                     </View>
                     <ScrollView
                       style={styles.timelineScroll}
@@ -2428,7 +2423,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   modalSubtitle: { fontSize: 13, marginTop: 3 },
-  timeline: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 30 },
+  timeline: { paddingHorizontal: 18, paddingTop: 12, paddingBottom: 30 },
   timelineScroll: { flex: 1, minHeight: 0, overflow: "hidden" },
   timelineRow: { flexDirection: "row", minHeight: 112 },
   timelineRail: { width: 42, alignItems: "center" },
@@ -2772,16 +2767,23 @@ const styles = StyleSheet.create({
   summaryChips: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 7,
+    gap: 6,
     paddingHorizontal: 18,
-    paddingTop: 14,
+    paddingTop: 10,
+    paddingBottom: 8,
   },
   summaryChip: {
     overflow: "hidden",
+    minHeight: 28,
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 9,
-    fontSize: 12,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  summaryChipText: {
+    includeFontPadding: false,
+    fontSize: 11,
+    lineHeight: 14,
     fontWeight: "700",
   },
   modalFooter: {
