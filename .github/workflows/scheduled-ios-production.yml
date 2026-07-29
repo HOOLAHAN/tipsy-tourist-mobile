@@ -1,0 +1,25 @@
+name: Build and submit iOS production app
+
+on:
+  # 08:17 GMT (09:17 BST) on 1 August. Cron has no year field, so remove
+  # this schedule after the 2026 run to prevent it running again next year.
+  schedule:
+    - cron: "17 8 1 8 *"
+  workflow_dispatch:
+
+jobs:
+  build-and-submit:
+    name: Build with EAS and submit to TestFlight
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+
+      - name: Set up Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Start production build and automatic submission
+        run: eas build --platform ios --profile production --auto-submit-with-profile production --non-interactive --no-wait
