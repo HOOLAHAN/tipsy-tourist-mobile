@@ -1,0 +1,25 @@
+name: Scheduled iOS production build and submission
+
+on:
+  # 08:17 GMT (09:17 BST) on 1 August. Cron has no year field, so remove
+  # this schedule after the 2026 run to prevent it running again next year.
+  schedule:
+    - cron: "17 8 1 8 *"
+  workflow_dispatch: {}
+
+jobs:
+  build_ios:
+    name: Build iOS production app
+    type: build
+    params:
+      platform: ios
+      profile: production
+      message: Scheduled production build after monthly quota reset
+
+  submit_ios:
+    name: Submit iOS build to App Store Connect
+    needs: [build_ios]
+    type: submit
+    params:
+      profile: production
+      build_id: ${{ needs.build_ios.outputs.build_id }}
