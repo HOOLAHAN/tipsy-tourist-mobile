@@ -35,6 +35,7 @@ import {
   getPlacePhotoUrl,
   getGoogleMapsRequestHeaders,
   getPlaceSuggestions,
+  findAdditionalStop,
   findReplacementStop,
   planRoute,
   routeThroughStops,
@@ -1375,6 +1376,75 @@ export default function App() {
       setUpdatingStopId(null);
     }
   };
+  const addStop = async (stopType: Place["stopType"]) => {
+    if (!route || updatingStopId) return;
+    const typeCount = route.stops.filter(
+      (stop) => stop.stopType === stopType,
+    ).length;
+    if (typeCount >= 10) {
+      Alert.alert(
+        "Stop limit reached",
+        `A route can contain up to 10 ${stopType === "pub" ? "pubs" : "attractions"}.`,
+      );
+      return;
+    }
+
+    const coordinates = [
+      route.origin,
+      ...route.stops.map((stop) => ({
+        latitude: stop.geometry.location.lat,
+        longitude: stop.geometry.location.lng,
+      })),
+      route.destination,
+    ];
+    let insertionIndex = 0;
+    let largestGap = -1;
+    for (let index = 0; index < coordinates.length - 1; index += 1) {
+      const latitude = coordinates[index + 1].latitude - coordinates[index].latitude;
+      const longitude =
+        coordinates[index + 1].longitude - coordinates[index].longitude;
+      const gap = latitude * latitude + longitude * longitude;
+      if (gap > largestGap) {
+        largestGap = gap;
+        insertionIndex = index;
+      }
+    }
+    const before = coordinates[insertionIndex];
+    const after = coordinates[insertionIndex + 1];
+    const point = {
+      latitude: (before.latitude + after.latitude) / 2,
+      longitude: (before.longitude + after.longitude) / 2,
+    };
+
+    setUpdatingStopId("__adding__");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      const place = await findAdditionalStop(
+        stopType,
+        point,
+        route.stops.map((stop) => stop.place_id),
+      );
+      const stops = [...route.stops];
+      stops.splice(insertionIndex, 0, place);
+      await applyStops(stops, route);
+    } catch (error) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        "Could not add stop",
+        error instanceof Error ? error.message : "Please try again.",
+      );
+    } finally {
+      setUpdatingStopId(null);
+    }
+  };
+  const chooseStopToAdd = () => {
+    if (!route || updatingStopId) return;
+    Alert.alert("Add a stop", "What would you like along the route?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Pub", onPress: () => addStop("pub") },
+      { text: "Attraction", onPress: () => addStop("attraction") },
+    ]);
+  };
   const travelLabel = mode === "bicycling" ? "cycling" : mode;
   const shareItinerary = async () => {
     if (!route || !mapRef.current || sharing) return;
@@ -2081,28 +2151,52 @@ export default function App() {
                           Hold a stop to reorder · tap for details
                         </Text>
                       </View>
-                      <Pressable
-                        accessibilityLabel="Share itinerary as an image"
-                        disabled={sharing}
-                        onPress={shareItinerary}
-                        style={[
-                          styles.shareButton,
-                          { backgroundColor: colors.surface },
-                        ]}
-                      >
-                        {sharing ? (
-                          <ActivityIndicator
-                            size="small"
-                            color={colors.primary}
-                          />
-                        ) : (
-                          <Ionicons
-                            name="share-outline"
-                            size={22}
-                            color={colors.primary}
-                          />
-                        )}
-                      </Pressable>
+                      <View style={styles.itineraryHeaderActions}>
+                        <Pressable
+                          accessibilityLabel="Add a stop"
+                          disabled={!!updatingStopId}
+                          onPress={chooseStopToAdd}
+                          style={[
+                            styles.shareButton,
+                            { backgroundColor: colors.surface },
+                          ]}
+                        >
+                          {updatingStopId === "__adding__" ? (
+                            <ActivityIndicator
+                              size="small"
+                              color={colors.primary}
+                            />
+                          ) : (
+                            <Ionicons
+                              name="add"
+                              size={25}
+                              color={colors.primary}
+                            />
+                          )}
+                        </Pressable>
+                        <Pressable
+                          accessibilityLabel="Share itinerary as an image"
+                          disabled={sharing}
+                          onPress={shareItinerary}
+                          style={[
+                            styles.shareButton,
+                            { backgroundColor: colors.surface },
+                          ]}
+                        >
+                          {sharing ? (
+                            <ActivityIndicator
+                              size="small"
+                              color={colors.primary}
+                            />
+                          ) : (
+                            <Ionicons
+                              name="share-outline"
+                              size={22}
+                              color={colors.primary}
+                            />
+                          )}
+                        </Pressable>
+                      </View>
                     </View>
                     <View style={styles.summaryChips}>
                       <Text
@@ -2403,7 +2497,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.28,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 3 },
-    elevation: 5,
+    elevation: 0,
   },
   pinLabel: {
     position: "absolute",
@@ -2414,6 +2508,8 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 14,
     fontWeight: "900",
+    zIndex: 2,
+    elevation: 2,
   },
   overlayScroll: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 160 },
   topCard: {
@@ -2772,6 +2868,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  itineraryHeaderActions: { flexDirection: "row", gap: 8 },
   shareCaptureStage: {
     position: "absolute",
     left: -2000,

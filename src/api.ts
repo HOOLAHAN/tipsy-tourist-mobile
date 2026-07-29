@@ -102,6 +102,14 @@ function isQualityCandidate(
   );
 }
 
+function isUsableCandidate(place: Omit<Place, "stopType">) {
+  return Boolean(
+    place.place_id &&
+      place.geometry?.location &&
+      place.business_status !== "CLOSED_PERMANENTLY",
+  );
+}
+
 async function nearbyCandidates(
   path: "/places" | "/attractions",
   point: Coordinate,
@@ -119,7 +127,9 @@ async function nearbyCandidates(
   return (
     quality.length
       ? quality
-      : available.filter((item) => (item.rating ?? 0) >= 3.8)
+      : available.filter(
+          (item) => isUsableCandidate(item) && (item.rating ?? 0) >= 3.8,
+        )
   )
     .sort(
       (a, b) => candidateScore(b, point, type) - candidateScore(a, point, type),
@@ -298,6 +308,26 @@ export async function planRoute(
     throw new Error(
       "No pubs or attractions were found along this route. Try different locations or a longer route.",
     );
+  if (stops.length !== stopTypes.length) {
+    const missingPubs =
+      pubCount - stops.filter((stop) => stop.stopType === "pub").length;
+    const missingAttractions =
+      attractionCount -
+      stops.filter((stop) => stop.stopType === "attraction").length;
+    const missing = [
+      missingPubs > 0
+        ? `${missingPubs} ${missingPubs === 1 ? "pub" : "pubs"}`
+        : null,
+      missingAttractions > 0
+        ? `${missingAttractions} ${missingAttractions === 1 ? "attraction" : "attractions"}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" and ");
+    throw new Error(
+      `We couldn't find ${missing} of a suitable standard along this route. Try a longer route or nearby locations.`,
+    );
+  }
   return routeThroughStops(origin, destination, stops, mode);
 }
 
@@ -321,4 +351,25 @@ export async function findReplacementStop(
   if (!replacement)
     throw new Error(`No different ${stop.stopType} was found nearby.`);
   return replacement;
+}
+
+export async function findAdditionalStop(
+  stopType: Place["stopType"],
+  point: Coordinate,
+  excludedPlaceIds: string[],
+): Promise<Place> {
+  const candidates = await nearbyCandidates(
+    stopType === "pub" ? "/places" : "/attractions",
+    point,
+    stopType,
+  );
+  const excluded = new Set(excludedPlaceIds);
+  const place = candidates.find(
+    (candidate) => !excluded.has(candidate.place_id),
+  );
+  if (!place)
+    throw new Error(
+      `No suitable ${stopType} was found in that part of the route.`,
+    );
+  return place;
 }
