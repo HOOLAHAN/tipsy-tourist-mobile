@@ -22,7 +22,11 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import MapView, {
   Marker,
   Polyline,
@@ -987,7 +991,8 @@ const ShareCard = forwardRef<
   );
 });
 
-export default function App() {
+function AppContent() {
+  const safeAreaInsets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
   const shareCardRef = useRef<View>(null);
   const shareImageLoadedRef = useRef<(() => void) | null>(null);
@@ -1505,7 +1510,6 @@ export default function App() {
   };
 
   return (
-    <SafeAreaProvider>
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <StatusBar style={themeName === "light" ? "dark" : "light"} />
         <MapView
@@ -1867,7 +1871,10 @@ export default function App() {
         >
           <View style={[styles.modalOverlay, styles.bottomModalOverlay]}>
             <Pressable style={styles.modalDismiss} onPress={closeInfo} />
-            <SafeAreaView style={[styles.modalSafe, styles.bottomModalSafe]}>
+            <SafeAreaView
+              edges={["left", "right"]}
+              style={[styles.modalSafe, styles.bottomModalSafe]}
+            >
               <Animated.View
                 style={[
                   styles.modalPanel,
@@ -1876,6 +1883,7 @@ export default function App() {
                   {
                     backgroundColor: colors.card,
                     borderColor: colors.border,
+                    paddingBottom: safeAreaInsets.bottom,
                     transform: [{ translateY: infoTranslateY }],
                   },
                 ]}
@@ -2052,7 +2060,10 @@ export default function App() {
         >
           <View style={[styles.modalOverlay, styles.bottomModalOverlay]}>
             <Pressable style={styles.modalDismiss} onPress={closeItinerary} />
-            <SafeAreaView style={[styles.modalSafe, styles.bottomModalSafe]}>
+            <SafeAreaView
+              edges={["left", "right"]}
+              style={[styles.modalSafe, styles.bottomModalSafe]}
+            >
               <Animated.View
                 style={[
                   styles.modalPanel,
@@ -2061,6 +2072,7 @@ export default function App() {
                   {
                     backgroundColor: colors.card,
                     borderColor: colors.border,
+                    paddingBottom: safeAreaInsets.bottom,
                     transform: [{ translateY: itineraryTranslateY }],
                   },
                 ]}
@@ -2285,6 +2297,13 @@ export default function App() {
           </View>
         )}
       </View>
+  );
+}
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AppContent />
     </SafeAreaProvider>
   );
 }
@@ -2382,8 +2401,6 @@ const styles = StyleSheet.create({
   bottomModalPanel: {
     height: "100%",
     maxHeight: "100%",
-    marginBottom: Platform.OS === "ios" ? -34 : 0,
-    paddingBottom: Platform.OS === "ios" ? 34 : 0,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
     borderTopLeftRadius: 30,
