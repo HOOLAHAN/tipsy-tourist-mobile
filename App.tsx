@@ -253,6 +253,7 @@ function AutocompleteInput({
 
 function StopCounter({
   label,
+  min = 0,
   max,
   value,
   icon,
@@ -260,6 +261,7 @@ function StopCounter({
   colors,
 }: {
   label: string;
+  min?: number;
   max: number;
   value: number;
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
@@ -284,14 +286,14 @@ function StopCounter({
       </View>
       <View style={styles.counterButtons}>
         <Pressable
-          disabled={value <= 1}
-          onPress={() => onChange(Math.max(1, value - 1))}
+          disabled={value <= min}
+          onPress={() => onChange(Math.max(min, value - 1))}
           style={[
             styles.counterCircle,
             {
               borderColor: colors.border,
               backgroundColor: colors.card,
-              opacity: value <= 1 ? 0.35 : 1,
+              opacity: value <= min ? 0.35 : 1,
             },
           ]}
         >
@@ -1265,6 +1267,11 @@ function AppContent() {
       );
   };
   const submit = async () => {
+    if (pubs + attractions < 1)
+      return Alert.alert(
+        "Choose at least one stop",
+        "Add a pub or sight before planning your walking tour.",
+      );
     if (!start.trim() || (plannerMode === "journey" && !finish.trim()))
       return Alert.alert(
         plannerMode === "local" ? "Choose a location" : "Choose both locations",
@@ -1784,9 +1791,9 @@ function AppContent() {
             <Pressable
               accessibilityLabel="Centre map on me"
               onPress={() => locateMe()}
-              style={[styles.dockButton, { backgroundColor: colors.primary }]}
+              style={[styles.dockButton, { backgroundColor: colors.surface }]}
             >
-              <Ionicons name="navigate" size={24} color="#fff" />
+              <Ionicons name="navigate" size={24} color={colors.text} />
             </Pressable>
             <Pressable
               accessibilityLabel="About and support"
@@ -2020,6 +2027,7 @@ function AppContent() {
                 <View style={styles.countersRow}>
                   <StopCounter
                     label="Pubs"
+                    min={attractions === 0 ? 1 : 0}
                     max={10}
                     value={pubs}
                     icon="glass-cocktail"
@@ -2028,6 +2036,7 @@ function AppContent() {
                   />
                   <StopCounter
                     label="Sights"
+                    min={pubs === 0 ? 1 : 0}
                     max={10}
                     value={attractions}
                     icon="camera"
