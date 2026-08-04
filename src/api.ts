@@ -6,6 +6,7 @@ import {
   PlaceDetails,
   PlaceSuggestion,
   RoutePlan,
+  RouteLeg,
   SearchCoverage,
   TravelMode,
 } from "./types";
@@ -312,9 +313,59 @@ export async function routeThroughStops(
   const legs = route.legs as {
     distance: { value: number };
     duration: { value: number };
+    start_location: { lat: number; lng: number };
+    end_location: { lat: number; lng: number };
+    steps?: { polyline?: { points?: string } }[];
   }[];
   const metres = legs.reduce((sum, leg) => sum + leg.distance.value, 0);
   const seconds = legs.reduce((sum, leg) => sum + leg.duration.value, 0);
+  const routeLegs: RouteLeg[] = legs.map((leg) => {
+    const stepCoordinates = (leg.steps ?? []).flatMap((step) =>
+      step.polyline?.points
+        ? polyline
+            .decode(step.polyline.points)
+            .map(([latitude, longitude]) => ({ latitude, longitude }))
+        : [],
+    );
+    const coordinates = stepCoordinates.length > 1
+      ? stepCoordinates
+      : [
+          { latitude: leg.start_location.lat, longitude: leg.start_location.lng },
+          { latitude: leg.end_location.lat, longitude: leg.end_location.lng },
+        ];
+    const segmentDistances = coordinates.slice(1).map((point, index) =>
+      distanceInMetres(coordinates[index], point),
+    );
+    const halfway = segmentDistances.reduce((sum, value) => sum + value, 0) / 2;
+    let covered = 0;
+    let midpoint = coordinates[Math.floor(coordinates.length / 2)];
+    for (let index = 0; index < segmentDistances.length; index += 1) {
+      const segmentDistance = segmentDistances[index];
+      if (covered + segmentDistance >= halfway) {
+        const amount = segmentDistance
+          ? (halfway - covered) / segmentDistance
+          : 0;
+        midpoint = {
+          latitude:
+            coordinates[index].latitude +
+            (coordinates[index + 1].latitude - coordinates[index].latitude) * amount,
+          longitude:
+            coordinates[index].longitude +
+            (coordinates[index + 1].longitude - coordinates[index].longitude) * amount,
+        };
+        break;
+      }
+      covered += segmentDistance;
+    }
+    return {
+      distance:
+        leg.distance.value >= 1000
+          ? `${(leg.distance.value / 1000).toFixed(1)} km`
+          : `${leg.distance.value} m`,
+      duration: `${Math.max(1, Math.round(leg.duration.value / 60))} min`,
+      midpoint,
+    };
+  });
   return {
     origin,
     destination,
@@ -328,6 +379,7 @@ export async function routeThroughStops(
       seconds >= 3600
         ? `${Math.floor(seconds / 3600)} hr ${Math.round((seconds % 3600) / 60)} min`
         : `${Math.round(seconds / 60)} min`,
+    legs: routeLegs,
   };
 }
 

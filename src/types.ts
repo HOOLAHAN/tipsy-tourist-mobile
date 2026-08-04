@@ -62,4 +62,11 @@ export type RoutePlan = {
   stops: Place[];
   distance: string;
   duration: string;
+  legs: RouteLeg[];
+};
+
+export type RouteLeg = {
+  distance: string;
+  duration: string;
+  midpoint: Coordinate;
 };

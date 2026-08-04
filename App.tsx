@@ -54,6 +54,7 @@ import {
   PlaceDetails,
   PlaceSuggestion,
   RoutePlan,
+  RouteLeg,
   SearchCoverage,
 } from "./src/types";
 
@@ -569,6 +570,7 @@ function PlaceCard({
   onRemove,
   onRegenerate,
   updating,
+  leg,
 }: {
   place: Place;
   index: number;
@@ -579,6 +581,7 @@ function PlaceCard({
   onRemove?: () => void;
   onRegenerate?: () => void;
   updating?: boolean;
+  leg?: RouteLeg;
 }) {
   const [details, setDetails] = useState<PlaceDetails | null>(null);
   useEffect(() => {
@@ -696,6 +699,7 @@ function ItineraryRow({
   onRemove,
   onRegenerate,
   updating,
+  leg,
 }: {
   place: Place;
   index: number;
@@ -708,6 +712,7 @@ function ItineraryRow({
   onRemove: () => void;
   onRegenerate: () => void;
   updating?: boolean;
+  leg?: RouteLeg;
 }) {
   const stopColor = place.stopType === "pub" ? "#e11d48" : "#7c3aed";
   const translateY = useRef(new Animated.Value(0)).current;
@@ -840,6 +845,18 @@ function ItineraryRow({
               ? "Move up or down, then release"
               : (place.vicinity ?? "Tap for place details")}
           </Text>
+          {leg && !dragging && (
+            <View style={styles.itineraryLeg}>
+              <MaterialCommunityIcons
+                name="walk"
+                size={14}
+                color={colors.primary}
+              />
+              <Text style={[styles.itineraryLegText, { color: colors.primary }]}>
+                {index === 0 ? "From start" : "From previous stop"} · {leg.duration} · {leg.distance}
+              </Text>
+            </View>
+          )}
         </View>
         <View style={styles.rowActions}>
           <Pressable
@@ -1026,6 +1043,7 @@ function AppContent() {
   const [route, setRoute] = useState<RoutePlan | null>(null);
   const [searchCoverage, setSearchCoverage] = useState<SearchCoverage | null>(null);
   const [showSearchCoverage, setShowSearchCoverage] = useState(true);
+  const [showWalkingLegs, setShowWalkingLegs] = useState(true);
   const [loading, setLoading] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [updatingStopId, setUpdatingStopId] = useState<string | null>(null);
@@ -1662,6 +1680,31 @@ function AppContent() {
               ))}
             </>
           )}
+          {!capturingShareMap && route?.legs.map((leg, index) => (
+            <Marker
+              key={`walking-leg-${index}`}
+              coordinate={leg.midpoint}
+              anchor={{ x: 0.5, y: 0.5 }}
+              zIndex={6}
+            >
+              <View
+                pointerEvents="none"
+                style={[
+                  styles.mapLegLabel,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: colors.primary,
+                    opacity: showWalkingLegs ? 1 : 0,
+                  },
+                ]}
+              >
+                <MaterialCommunityIcons name="walk" size={13} color={colors.primary} />
+                <Text style={[styles.mapLegText, { color: colors.text }]}>
+                  {leg.duration} · {leg.distance}
+                </Text>
+              </View>
+            </Marker>
+          ))}
         </MapView>
 
         <SafeAreaView pointerEvents="box-none" style={StyleSheet.absoluteFill}>
@@ -1774,6 +1817,23 @@ function AppContent() {
                   name="map-marker-radius-outline"
                   size={25}
                   color={showSearchCoverage ? "#fff" : colors.text}
+                />
+              </Pressable>
+            )}
+            {route && (
+              <Pressable
+                accessibilityLabel={`${showWalkingLegs ? "Hide" : "Show"} walking times and distances`}
+                accessibilityState={{ selected: showWalkingLegs }}
+                onPress={() => setShowWalkingLegs((visible) => !visible)}
+                style={[
+                  styles.dockButton,
+                  { backgroundColor: showWalkingLegs ? colors.accent : colors.surface },
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name="walk"
+                  size={24}
+                  color={showWalkingLegs ? "#fff" : colors.text}
                 />
               </Pressable>
             )}
@@ -2406,8 +2466,22 @@ function AppContent() {
                           updating={updatingStopId === place.place_id}
                           onRegenerate={() => regenerateStop(place)}
                           onRemove={() => removeStop(place)}
+                          leg={route.legs[index]}
                         />
                       ))}
+                      {route && route.legs.length > route.stops.length && (
+                        <View
+                          style={[
+                            styles.finalLeg,
+                            { backgroundColor: colors.surface, borderColor: colors.border },
+                          ]}
+                        >
+                          <MaterialCommunityIcons name="walk" size={17} color={colors.primary} />
+                          <Text style={[styles.finalLegText, { color: colors.text }]}>
+                            Final stop to finish · {route.legs[route.stops.length].duration} · {route.legs[route.stops.length].distance}
+                          </Text>
+                        </View>
+                      )}
                     </ScrollView>
                   </View>
                 )}
@@ -2633,6 +2707,25 @@ const styles = StyleSheet.create({
   itineraryType: { fontSize: 10, fontWeight: "900", letterSpacing: 0.8 },
   itineraryName: { fontSize: 17, fontWeight: "800", letterSpacing: -0.2 },
   itineraryAddress: { fontSize: 12, marginTop: 3 },
+  itineraryLeg: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    marginTop: 5,
+  },
+  itineraryLegText: { fontSize: 11, fontWeight: "700" },
+  finalLeg: {
+    minHeight: 42,
+    marginLeft: 42,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    marginBottom: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  finalLegText: { flex: 1, fontSize: 12, fontWeight: "700" },
   rowActions: { gap: 5 },
   rowAction: {
     width: 30,
@@ -2856,21 +2949,36 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     borderWidth: 1,
     borderRadius: 36,
-    padding: 6,
+    padding: 5,
     flexDirection: "row",
-    gap: 5,
+    gap: 3,
     shadowOpacity: 0.18,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
     elevation: 9,
   },
   dockButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
   },
+  mapLegLabel: {
+    minHeight: 28,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    shadowColor: "#000",
+    shadowOpacity: 0.16,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  mapLegText: { fontSize: 10, fontWeight: "800" },
   endpointMarker: {
     width: 62,
     height: 62,
