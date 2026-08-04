@@ -2967,7 +2967,7 @@ const styles = StyleSheet.create({
     borderRadius: 36,
     padding: 5,
     flexDirection: "row",
-    gap: 3,
+    gap: 4,
     shadowOpacity: 0.18,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
