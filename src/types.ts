@@ -1,5 +1,15 @@
 export type Coordinate = { latitude: number; longitude: number };
 
+export type SearchCoveragePoint = Coordinate & {
+  stopType: "pub" | "attraction";
+  radius: number;
+};
+
+export type SearchCoverage = {
+  path: Coordinate[];
+  points: SearchCoveragePoint[];
+};
+
 export type TravelMode = "walking" | "bicycling";
 
 export type Place = {

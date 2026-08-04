@@ -6,6 +6,7 @@ import {
   PlaceDetails,
   PlaceSuggestion,
   RoutePlan,
+  SearchCoverage,
   TravelMode,
 } from "./types";
 
@@ -114,10 +115,11 @@ async function nearbyCandidates(
   path: "/places" | "/attractions",
   point: Coordinate,
   type: Place["stopType"],
+  radius?: number,
 ): Promise<Place[]> {
   const response = await post<{
     data: { results?: Omit<Place, "stopType">[] } | Omit<Place, "stopType">[];
-  }>(path, { lat: point.latitude, lng: point.longitude });
+  }>(path, { lat: point.latitude, lng: point.longitude, radius });
   const results = Array.isArray(response.data)
     ? response.data
     : response.data?.results;
@@ -138,13 +140,45 @@ async function nearbyCandidates(
 }
 
 function plotPoints(start: Coordinate, end: Coordinate, count: number) {
+  if (count <= 0) return [];
+  if (count === 1) {
+    return [{
+      latitude: (start.latitude + end.latitude) / 2,
+      longitude: (start.longitude + end.longitude) / 2,
+    }];
+  }
   return Array.from({ length: count }, (_, index) => {
-    const amount = (index + 1) / (count + 1);
+    const amount = index / (count - 1);
     return {
       latitude: start.latitude + (end.latitude - start.latitude) * amount,
       longitude: start.longitude + (end.longitude - start.longitude) * amount,
     };
   });
+}
+
+function distanceInMetres(start: Coordinate, end: Coordinate) {
+  const toRadians = (degrees: number) => degrees * (Math.PI / 180);
+  const earthRadius = 6371000;
+  const latitudeDelta = toRadians(end.latitude - start.latitude);
+  const longitudeDelta = toRadians(end.longitude - start.longitude);
+  const startLatitude = toRadians(start.latitude);
+  const endLatitude = toRadians(end.latitude);
+  const a =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(startLatitude) *
+      Math.cos(endLatitude) *
+      Math.sin(longitudeDelta / 2) ** 2;
+  return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function adaptiveSearchRadius(
+  start: Coordinate,
+  end: Coordinate,
+  searchCount: number,
+) {
+  const gaps = Math.max(searchCount - 1, 1);
+  const overlappingRadius = (distanceInMetres(start, end) / gaps) * 0.6;
+  return Math.round(Math.min(3000, Math.max(400, overlappingRadius)));
 }
 
 function mixedStopTypes(
@@ -272,6 +306,7 @@ export async function planRoute(
   pubCount: number,
   attractionCount: number,
   mode: TravelMode,
+  onSearchCoverage?: (coverage: SearchCoverage) => void,
 ): Promise<RoutePlan> {
   if (!MAPS_KEY)
     throw new Error(
@@ -283,6 +318,19 @@ export async function planRoute(
   ]);
   const stopTypes = mixedStopTypes(pubCount, attractionCount);
   const points = plotPoints(origin, destination, stopTypes.length);
+  const searchRadius = adaptiveSearchRadius(
+    origin,
+    destination,
+    stopTypes.length,
+  );
+  onSearchCoverage?.({
+    path: [origin, destination],
+    points: points.map((point, index) => ({
+      ...point,
+      stopType: stopTypes[index],
+      radius: searchRadius,
+    })),
+  });
   const stops: Place[] = [];
   const selectedIds = new Set<string>();
   const candidateGroups = await Promise.all(
@@ -291,6 +339,7 @@ export async function planRoute(
         type === "pub" ? "/places" : "/attractions",
         points[index],
         type,
+        searchRadius,
       ),
     ),
   );

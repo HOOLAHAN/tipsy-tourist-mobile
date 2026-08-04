@@ -30,6 +30,7 @@ import {
 import MapView, {
   Marker,
   Polyline,
+  Circle,
   PROVIDER_GOOGLE,
   Region,
 } from "react-native-maps";
@@ -50,6 +51,7 @@ import {
   PlaceDetails,
   PlaceSuggestion,
   RoutePlan,
+  SearchCoverage,
   TravelMode,
 } from "./src/types";
 
@@ -1026,6 +1028,8 @@ function AppContent() {
   const [attractions, setAttractions] = useState(1);
   const [mode, setMode] = useState<TravelMode>("walking");
   const [route, setRoute] = useState<RoutePlan | null>(null);
+  const [searchCoverage, setSearchCoverage] = useState<SearchCoverage | null>(null);
+  const [showSearchCoverage, setShowSearchCoverage] = useState(true);
   const [loading, setLoading] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [updatingStopId, setUpdatingStopId] = useState<string | null>(null);
@@ -1253,9 +1257,17 @@ function AppContent() {
         "Choose both a start and finish location.",
       );
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSearchCoverage(null);
     setLoading(true);
     try {
-      const next = await planRoute(start, finish, pubs, attractions, mode);
+      const next = await planRoute(
+        start,
+        finish,
+        pubs,
+        attractions,
+        mode,
+        setSearchCoverage,
+      );
       setRoute(next);
       setPlannerOpen(false);
       requestAnimationFrame(() =>
@@ -1275,6 +1287,7 @@ function AppContent() {
   };
   const clear = () => {
     setRoute(null);
+    setSearchCoverage(null);
     setStart("");
     setFinish("");
     openPlanner();
@@ -1538,6 +1551,39 @@ function AppContent() {
           showsUserLocation
           showsMyLocationButton={false}
         >
+          {!capturingShareMap && showSearchCoverage && searchCoverage && (
+            <>
+              <Polyline
+                coordinates={searchCoverage.path}
+                strokeColor={themeName === "light" ? "#0f172a" : "#e2e8f0"}
+                strokeWidth={3}
+                lineDashPattern={[2, 9]}
+              />
+              {searchCoverage.points.map((point, index) => {
+                const isPub = point.stopType === "pub";
+                return (
+                  <Circle
+                    key={`search-area-${index}`}
+                    center={point}
+                    radius={point.radius}
+                    fillColor={isPub ? "rgba(225,29,72,0.08)" : "rgba(124,58,237,0.08)"}
+                    strokeColor={isPub ? "rgba(225,29,72,0.72)" : "rgba(124,58,237,0.72)"}
+                    strokeWidth={2}
+                  />
+                );
+              })}
+              {searchCoverage.points.map((point, index) => (
+                <Circle
+                  key={`search-centre-${index}`}
+                  center={point}
+                  radius={28}
+                  fillColor={point.stopType === "pub" ? "#e11d48" : "#7c3aed"}
+                  strokeColor="#ffffff"
+                  strokeWidth={2}
+                />
+              ))}
+            </>
+          )}
           {route && (
             <>
               <Polyline
@@ -1660,26 +1706,6 @@ function AppContent() {
             >
               <Ionicons name="navigate" size={24} color="#fff" />
             </Pressable>
-            {route && (
-              <Pressable
-                accessibilityLabel="Clear route"
-                onPress={clear}
-                style={[styles.dockButton, { backgroundColor: colors.surface }]}
-              >
-                <Ionicons name="close" size={27} color={colors.text} />
-              </Pressable>
-            )}
-            <Pressable
-              accessibilityLabel={`Use ${themeName === "light" ? "dark" : "light"} mode`}
-              onPress={toggleTheme}
-              style={[styles.dockButton, { backgroundColor: colors.surface }]}
-            >
-              <Ionicons
-                name={themeName === "light" ? "moon" : "sunny"}
-                size={23}
-                color={themeName === "light" ? "#475569" : "#fbbf24"}
-              />
-            </Pressable>
             <Pressable
               accessibilityLabel="About and support"
               onPress={openInfo}
@@ -1691,6 +1717,43 @@ function AppContent() {
                 color={colors.text}
               />
             </Pressable>
+            <Pressable
+              accessibilityLabel={`Use ${themeName === "light" ? "dark" : "light"} mode`}
+              onPress={toggleTheme}
+              style={[styles.dockButton, { backgroundColor: colors.surface }]}
+            >
+              <Ionicons
+                name={themeName === "light" ? "moon" : "sunny"}
+                size={23}
+                color={themeName === "light" ? "#475569" : "#fbbf24"}
+              />
+            </Pressable>
+            {searchCoverage && (
+              <Pressable
+                accessibilityLabel={`${showSearchCoverage ? "Hide" : "Show"} search coverage`}
+                accessibilityState={{ selected: showSearchCoverage }}
+                onPress={() => setShowSearchCoverage((visible) => !visible)}
+                style={[
+                  styles.dockButton,
+                  { backgroundColor: showSearchCoverage ? colors.accent : colors.surface },
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name="map-marker-radius-outline"
+                  size={25}
+                  color={showSearchCoverage ? "#fff" : colors.text}
+                />
+              </Pressable>
+            )}
+            {route && (
+              <Pressable
+                accessibilityLabel="Clear route"
+                onPress={clear}
+                style={[styles.dockButton, { backgroundColor: colors.surface }]}
+              >
+                <Ionicons name="close" size={27} color={colors.text} />
+              </Pressable>
+            )}
             {route && (
               <Pressable
                 accessibilityLabel="View itinerary"
@@ -2700,18 +2763,18 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     borderWidth: 1,
     borderRadius: 36,
-    padding: 7,
+    padding: 6,
     flexDirection: "row",
-    gap: 7,
+    gap: 5,
     shadowOpacity: 0.18,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
     elevation: 9,
   },
   dockButton: {
-    width: 49,
-    height: 49,
-    borderRadius: 25,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     alignItems: "center",
     justifyContent: "center",
   },
