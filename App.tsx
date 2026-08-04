@@ -55,7 +55,6 @@ import {
   PlaceSuggestion,
   RoutePlan,
   SearchCoverage,
-  TravelMode,
 } from "./src/types";
 
 const LONDON: Region = {
@@ -69,15 +68,6 @@ const SUPPORT_BASE_URL =
   process.env.EXPO_PUBLIC_SUPPORT_URL ??
   "https://d3pbhrkalr09t8.cloudfront.net";
 const SHARE_MAP_ASPECT = 1080 / 600;
-const modes: {
-  value: TravelMode;
-  label: string;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
-}[] = [
-  { value: "bicycling", label: "Bike", icon: "bike" },
-  { value: "walking", label: "Walk", icon: "walk" },
-];
-
 function RainbowTitle() {
   const colors = ["#ea4335", "#fbbc05", "#4285f4", "#34a853"];
   return (
@@ -1032,7 +1022,7 @@ function AppContent() {
   const [localRadius, setLocalRadius] = useState(1500);
   const [pubs, setPubs] = useState(1);
   const [attractions, setAttractions] = useState(1);
-  const [mode, setMode] = useState<TravelMode>("walking");
+  const mode = "walking" as const;
   const [route, setRoute] = useState<RoutePlan | null>(null);
   const [searchCoverage, setSearchCoverage] = useState<SearchCoverage | null>(null);
   const [showSearchCoverage, setShowSearchCoverage] = useState(true);
@@ -1496,7 +1486,7 @@ function AppContent() {
       { text: "Attraction", onPress: () => addStop("attraction") },
     ]);
   };
-  const travelLabel = mode === "bicycling" ? "cycling" : mode;
+  const travelLabel = "walking";
   const shareItinerary = async () => {
     if (!route || !mapRef.current || sharing) return;
     setSharing(true);
@@ -1958,45 +1948,6 @@ function AppContent() {
                   </View>
                 )}
                 <Text style={[styles.sectionLabel, { color: colors.muted }]}>
-                  TRAVEL MODE
-                </Text>
-                <View
-                  style={[
-                    styles.modeRow,
-                    {
-                      backgroundColor: colors.surface,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                >
-                  {modes.map((item) => (
-                    <Pressable
-                      key={item.value}
-                      onPress={() => setMode(item.value)}
-                      style={[
-                        styles.modeButton,
-                        mode === item.value && {
-                          backgroundColor: colors.primary,
-                        },
-                      ]}
-                    >
-                      <MaterialCommunityIcons
-                        name={item.icon}
-                        size={20}
-                        color={mode === item.value ? "#fff" : colors.muted}
-                      />
-                      <Text
-                        style={[
-                          styles.modeLabel,
-                          { color: mode === item.value ? "#fff" : colors.text },
-                        ]}
-                      >
-                        {item.label}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-                <Text style={[styles.sectionLabel, { color: colors.muted }]}>
                   STOPS ALONG THE WAY
                 </Text>
                 <View style={styles.countersRow}>
@@ -2130,7 +2081,7 @@ function AppContent() {
                         "help",
                         "Help",
                         "help-buoy-outline",
-                        "Choose start and finish points, select your travel mode and stops, then plan. Tap pins for venue details or open the itinerary to review and reorder stops.",
+                        "Choose start and finish points or a local area, select your stops, then plan your walking tour. Tap pins for venue details or open the itinerary to review and reorder stops.",
                       ],
                       [
                         "safety",
@@ -2830,25 +2781,6 @@ const styles = StyleSheet.create({
   },
   suggestionText: { flex: 1, fontSize: 14 },
   divider: { height: 1, marginVertical: 5 },
-  modeRow: {
-    flexDirection: "row",
-    borderWidth: 1,
-    borderRadius: 999,
-    padding: 4,
-    gap: 4,
-  },
-  modeButton: {
-    flex: 1,
-    minHeight: 40,
-    flexDirection: "row",
-    gap: 7,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 0,
-    borderRadius: 999,
-  },
-  modeButtonSelected: { backgroundColor: BLUE },
-  modeLabel: { fontSize: 15, fontWeight: "600" },
   countersRow: { flexDirection: "row", gap: 7 },
   stopCounter: {
     flex: 1,

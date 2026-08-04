@@ -10,7 +10,7 @@ export type SearchCoverage = {
   points: SearchCoveragePoint[];
 };
 
-export type TravelMode = "walking" | "bicycling";
+export type TravelMode = "walking";
 
 export type Place = {
   place_id: string;
