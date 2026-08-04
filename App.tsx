@@ -1,4 +1,5 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import Slider from "@react-native-community/slider";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
@@ -44,6 +45,7 @@ import {
   findAdditionalStop,
   findReplacementStop,
   planRoute,
+  planLocalTour,
   routeThroughStops,
 } from "./src/api";
 import { ThemeName, themes } from "./src/theme";
@@ -1026,6 +1028,8 @@ function AppContent() {
   const [isReordering, setIsReordering] = useState(false);
   const [start, setStart] = useState("");
   const [finish, setFinish] = useState("");
+  const [plannerMode, setPlannerMode] = useState<"journey" | "local">("journey");
+  const [localRadius, setLocalRadius] = useState(1500);
   const [pubs, setPubs] = useState(1);
   const [attractions, setAttractions] = useState(1);
   const [mode, setMode] = useState<TravelMode>("walking");
@@ -1253,23 +1257,34 @@ function AppContent() {
       );
   };
   const submit = async () => {
-    if (!start.trim() || !finish.trim())
+    if (!start.trim() || (plannerMode === "journey" && !finish.trim()))
       return Alert.alert(
-        "Choose both locations",
-        "Choose both a start and finish location.",
+        plannerMode === "local" ? "Choose a location" : "Choose both locations",
+        plannerMode === "local"
+          ? "Choose the area where you want to take your local tour."
+          : "Choose both a start and finish location.",
       );
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSearchCoverage(null);
     setLoading(true);
     try {
-      const next = await planRoute(
-        start,
-        finish,
-        pubs,
-        attractions,
-        mode,
-        setSearchCoverage,
-      );
+      const next = plannerMode === "local"
+        ? await planLocalTour(
+            start,
+            localRadius,
+            pubs,
+            attractions,
+            mode,
+            setSearchCoverage,
+          )
+        : await planRoute(
+            start,
+            finish,
+            pubs,
+            attractions,
+            mode,
+            setSearchCoverage,
+          );
       setRoute(next);
       setPlannerOpen(false);
       requestAnimationFrame(() =>
@@ -1615,20 +1630,25 @@ function AppContent() {
               />
               {searchCoverage.points.map((point, index) => {
                 const isPub = point.stopType === "pub";
+                const isLocal = point.stopType === "local";
                 return (
                   <Circle
                     key={`search-area-${index}`}
                     center={point}
                     radius={point.radius}
                     fillColor={showSearchCoverage
-                      ? isPub
-                        ? "rgba(225,29,72,0.08)"
-                        : "rgba(124,58,237,0.08)"
+                      ? isLocal
+                        ? "rgba(59,130,246,0.10)"
+                        : isPub
+                          ? "rgba(225,29,72,0.08)"
+                          : "rgba(124,58,237,0.08)"
                       : "rgba(0,0,0,0)"}
                     strokeColor={showSearchCoverage
-                      ? isPub
-                        ? "rgba(225,29,72,0.72)"
-                        : "rgba(124,58,237,0.72)"
+                      ? isLocal
+                        ? "rgba(59,130,246,0.78)"
+                        : isPub
+                          ? "rgba(225,29,72,0.72)"
+                          : "rgba(124,58,237,0.72)"
                       : "rgba(0,0,0,0)"}
                     strokeWidth={showSearchCoverage ? 2 : 0}
                   />
@@ -1640,9 +1660,11 @@ function AppContent() {
                   center={point}
                   radius={28}
                   fillColor={showSearchCoverage
-                    ? point.stopType === "pub"
-                      ? "#e11d48"
-                      : "#7c3aed"
+                    ? point.stopType === "local"
+                      ? "#3b82f6"
+                      : point.stopType === "pub"
+                        ? "#e11d48"
+                        : "#7c3aed"
                     : "rgba(0,0,0,0)"}
                   strokeColor={showSearchCoverage ? "#ffffff" : "rgba(0,0,0,0)"}
                   strokeWidth={showSearchCoverage ? 2 : 0}
@@ -1824,10 +1846,12 @@ function AppContent() {
                     BUILD A ROUTE
                   </Text>
                   <Text style={[styles.sheetTitle, { color: colors.text }]}>
-                    Where are we going?
+                    {plannerMode === "local" ? "Explore nearby" : "Where are we going?"}
                   </Text>
                   <Text style={[styles.sheetSubtitle, { color: colors.muted }]}>
-                    Choose your route and we’ll find the stops.
+                    {plannerMode === "local"
+                      ? "Pick an area and we’ll create a circular tour."
+                      : "Choose your route and we’ll find the stops."}
                   </Text>
                 </View>
               </View>
@@ -1836,28 +1860,103 @@ function AppContent() {
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.plannerContent}
               >
+                <View
+                  style={[
+                    styles.plannerModeSwitch,
+                    { backgroundColor: colors.surface, borderColor: colors.border },
+                  ]}
+                >
+                  {([
+                    ["journey", "Start to finish", "map-marker-path"],
+                    ["local", "Local tour", "map-marker-radius-outline"],
+                  ] as const).map(([value, label, icon]) => (
+                    <Pressable
+                      key={value}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: plannerMode === value }}
+                      onPress={() => setPlannerMode(value)}
+                      style={[
+                        styles.plannerModeButton,
+                        plannerMode === value && { backgroundColor: colors.primary },
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name={icon}
+                        size={19}
+                        color={plannerMode === value ? "#fff" : colors.muted}
+                      />
+                      <Text
+                        style={[
+                          styles.plannerModeText,
+                          { color: plannerMode === value ? "#fff" : colors.text },
+                        ]}
+                      >
+                        {label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
                 <View style={styles.routeInputs}>
                   <AutocompleteInput
                     value={start}
                     onChange={setStart}
-                    placeholder="Start location"
+                    placeholder={plannerMode === "local" ? "Tour location" : "Start location"}
                     onLocate={() => locateMe("start")}
                     colors={colors}
                   />
+                  {plannerMode === "journey" && (
+                    <>
+                      <View
+                        style={[
+                          styles.routeConnector,
+                          { backgroundColor: colors.border },
+                        ]}
+                      />
+                      <AutocompleteInput
+                        value={finish}
+                        onChange={setFinish}
+                        placeholder="Finish location"
+                        onLocate={() => locateMe("finish")}
+                        colors={colors}
+                      />
+                    </>
+                  )}
+                </View>
+                {plannerMode === "local" && (
                   <View
                     style={[
-                      styles.routeConnector,
-                      { backgroundColor: colors.border },
+                      styles.radiusCard,
+                      { backgroundColor: colors.surface, borderColor: colors.border },
                     ]}
-                  />
-                  <AutocompleteInput
-                    value={finish}
-                    onChange={setFinish}
-                    placeholder="Finish location"
-                    onLocate={() => locateMe("finish")}
-                    colors={colors}
-                  />
-                </View>
+                  >
+                    <View style={styles.radiusHeading}>
+                      <View>
+                        <Text style={[styles.sectionLabel, { color: colors.muted, marginTop: 0 }]}>SEARCH RADIUS</Text>
+                        <Text style={[styles.radiusHelp, { color: colors.muted }]}>How far from your chosen location?</Text>
+                      </View>
+                      <Text style={[styles.radiusValue, { color: colors.primary }]}>
+                        {localRadius >= 1000
+                          ? `${(localRadius / 1000).toFixed(localRadius % 1000 ? 2 : 0)} km`
+                          : `${localRadius} m`}
+                      </Text>
+                    </View>
+                    <Slider
+                      accessibilityLabel="Local tour search radius"
+                      minimumValue={500}
+                      maximumValue={5000}
+                      step={250}
+                      value={localRadius}
+                      onValueChange={setLocalRadius}
+                      minimumTrackTintColor={colors.primary}
+                      maximumTrackTintColor={colors.border}
+                      thumbTintColor={colors.primary}
+                    />
+                    <View style={styles.radiusRangeLabels}>
+                      <Text style={[styles.radiusRangeText, { color: colors.muted }]}>500 m</Text>
+                      <Text style={[styles.radiusRangeText, { color: colors.muted }]}>5 km</Text>
+                    </View>
+                  </View>
+                )}
                 <Text style={[styles.sectionLabel, { color: colors.muted }]}>
                   TRAVEL MODE
                 </Text>
@@ -1937,7 +2036,11 @@ function AppContent() {
                         color="#fff"
                       />
                       <Text style={styles.primaryButtonText}>
-                        {route ? "Update my route" : "Plan my Tipsy Tour"}
+                        {route
+                          ? "Update my route"
+                          : plannerMode === "local"
+                            ? "Plan my local tour"
+                            : "Plan my Tipsy Tour"}
                       </Text>
                       <Ionicons name="arrow-forward" size={21} color="#fff" />
                     </>
@@ -2367,7 +2470,7 @@ function AppContent() {
               ref={shareCardRef}
               route={route}
               start={start}
-              finish={finish}
+              finish={plannerMode === "local" ? start : finish}
               travelLabel={travelLabel}
               mapUri={shareMapUri}
               onMapLoaded={() => shareImageLoadedRef.current?.()}
@@ -2438,6 +2541,23 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === "ios" ? 34 : 24,
     gap: 12,
   },
+  plannerModeSwitch: {
+    flexDirection: "row",
+    borderWidth: 1,
+    borderRadius: 999,
+    padding: 4,
+    gap: 4,
+  },
+  plannerModeButton: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 999,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+  plannerModeText: { fontSize: 14, fontWeight: "700" },
   routeInputs: { gap: 8, position: "relative" },
   routeConnector: {
     position: "absolute",
@@ -2453,6 +2573,27 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     marginTop: 5,
   },
+  radiusCard: {
+    borderWidth: 1,
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    paddingTop: 13,
+    paddingBottom: 8,
+  },
+  radiusHeading: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  radiusHelp: { fontSize: 12, marginTop: 3 },
+  radiusValue: { fontSize: 18, fontWeight: "800" },
+  radiusRangeLabels: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: -5,
+  },
+  radiusRangeText: { fontSize: 11, fontWeight: "600" },
   sheetClear: {
     minHeight: 42,
     borderRadius: 999,

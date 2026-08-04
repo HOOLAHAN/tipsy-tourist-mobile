@@ -417,6 +417,76 @@ export async function planRoute(
   return routeThroughStops(origin, destination, stops, mode);
 }
 
+export async function planLocalTour(
+  locationText: string,
+  radius: number,
+  pubCount: number,
+  attractionCount: number,
+  mode: TravelMode,
+  onSearchCoverage?: (coverage: SearchCoverage) => void,
+): Promise<RoutePlan> {
+  if (!MAPS_KEY)
+    throw new Error(
+      "Add the Tipsy Tourist mobile services key to your environment before planning a route.",
+    );
+  const centre = await geocode(locationText);
+  const searchRadius = Math.round(Math.min(5000, Math.max(500, radius)));
+  const stopTypes = mixedStopTypes(pubCount, attractionCount);
+  onSearchCoverage?.({
+    path: [centre, centre],
+    points: [{
+      ...centre,
+      stopType: "local",
+      radius: searchRadius,
+    }],
+  });
+
+  const [pubCandidates, attractionCandidates] = await Promise.all([
+    pubCount > 0
+      ? nearbyCandidates("/places", centre, "pub", searchRadius)
+      : Promise.resolve([]),
+    attractionCount > 0
+      ? nearbyCandidates("/attractions", centre, "attraction", searchRadius)
+      : Promise.resolve([]),
+  ]);
+  let pubIndex = 0;
+  let attractionIndex = 0;
+  const selectedIds = new Set<string>();
+  const stops = stopTypes
+    .map((type) => {
+      const candidates = type === "pub" ? pubCandidates : attractionCandidates;
+      let index = type === "pub" ? pubIndex : attractionIndex;
+      while (index < candidates.length && selectedIds.has(candidates[index].place_id)) {
+        index += 1;
+      }
+      if (type === "pub") pubIndex = index + 1;
+      else attractionIndex = index + 1;
+      const place = candidates[index];
+      if (place) selectedIds.add(place.place_id);
+      return place;
+    })
+    .filter((place): place is Place => Boolean(place));
+
+  if (stops.length !== stopTypes.length) {
+    throw new Error(
+      "We couldn't find enough suitable stops within this area. Increase the search radius or reduce the number of stops.",
+    );
+  }
+
+  const orderedStops = [...stops].sort((a, b) => {
+    const aAngle = Math.atan2(
+      a.geometry.location.lng - centre.longitude,
+      a.geometry.location.lat - centre.latitude,
+    );
+    const bAngle = Math.atan2(
+      b.geometry.location.lng - centre.longitude,
+      b.geometry.location.lat - centre.latitude,
+    );
+    return aAngle - bAngle;
+  });
+  return routeThroughStops(centre, centre, orderedStops, mode);
+}
+
 export async function findReplacementStop(
   stop: Place,
   excludedPlaceIds: string[],

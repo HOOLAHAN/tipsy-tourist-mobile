@@ -1,7 +1,7 @@
 export type Coordinate = { latitude: number; longitude: number };
 
 export type SearchCoveragePoint = Coordinate & {
-  stopType: "pub" | "attraction";
+  stopType: "pub" | "attraction" | "local";
   radius: number;
 };
 
