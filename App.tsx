@@ -2065,8 +2065,8 @@ function AppContent() {
                       <Text style={styles.primaryButtonText}>
                         {route
                           ? "Update my route"
-                          : plannerMode === "local"
-                            ? "Plan my local tour"
+                          : pubs === 0
+                            ? "Plan my Sober Sejour"
                             : "Plan my Tipsy Tour"}
                       </Text>
                       <Ionicons name="arrow-forward" size={21} color="#fff" />
