@@ -1583,6 +1583,7 @@ function AppContent() {
                 coordinates={route.coordinates}
                 strokeColor={colors.primary}
                 strokeWidth={6}
+                zIndex={5}
               />
               {!capturingShareMap && (
                 <>
@@ -1630,11 +1631,12 @@ function AppContent() {
                 coordinates={searchCoverage.path}
                 strokeColor={showSearchCoverage
                   ? themeName === "light"
-                    ? "#0f172a"
-                    : "#e2e8f0"
+                    ? "rgba(15,23,42,0.42)"
+                    : "rgba(226,232,240,0.42)"
                   : "rgba(0,0,0,0)"}
-                strokeWidth={showSearchCoverage ? 3 : 0}
+                strokeWidth={showSearchCoverage ? 2 : 0}
                 lineDashPattern={[2, 9]}
+                zIndex={2}
               />
               {searchCoverage.points.map((point, index) => {
                 const isPub = point.stopType === "pub";
@@ -1646,19 +1648,20 @@ function AppContent() {
                     radius={point.radius}
                     fillColor={showSearchCoverage
                       ? isLocal
-                        ? "rgba(59,130,246,0.10)"
+                        ? "rgba(59,130,246,0.05)"
                         : isPub
-                          ? "rgba(225,29,72,0.08)"
-                          : "rgba(124,58,237,0.08)"
+                          ? "rgba(225,29,72,0.035)"
+                          : "rgba(124,58,237,0.035)"
                       : "rgba(0,0,0,0)"}
                     strokeColor={showSearchCoverage
                       ? isLocal
-                        ? "rgba(59,130,246,0.78)"
+                        ? "rgba(59,130,246,0.42)"
                         : isPub
-                          ? "rgba(225,29,72,0.72)"
-                          : "rgba(124,58,237,0.72)"
+                          ? "rgba(225,29,72,0.34)"
+                          : "rgba(124,58,237,0.34)"
                       : "rgba(0,0,0,0)"}
                     strokeWidth={showSearchCoverage ? 2 : 0}
+                    zIndex={1}
                   />
                 );
               })}
@@ -1666,16 +1669,17 @@ function AppContent() {
                 <Circle
                   key={`search-centre-${index}`}
                   center={point}
-                  radius={28}
-                  fillColor={showSearchCoverage
+                  radius={14}
+                  fillColor={showSearchCoverage && !route
                     ? point.stopType === "local"
                       ? "#3b82f6"
                       : point.stopType === "pub"
                         ? "#e11d48"
                         : "#7c3aed"
                     : "rgba(0,0,0,0)"}
-                  strokeColor={showSearchCoverage ? "#ffffff" : "rgba(0,0,0,0)"}
-                  strokeWidth={showSearchCoverage ? 2 : 0}
+                  strokeColor={showSearchCoverage && !route ? "#ffffff" : "rgba(0,0,0,0)"}
+                  strokeWidth={showSearchCoverage && !route ? 1 : 0}
+                  zIndex={2}
                 />
               ))}
             </>
@@ -1695,12 +1699,15 @@ function AppContent() {
                     backgroundColor: colors.card,
                     borderColor: colors.primary,
                     opacity: showWalkingLegs ? 1 : 0,
+                    transform: [{ translateY: index % 2 === 0 ? -18 : 18 }],
                   },
                 ]}
               >
-                <MaterialCommunityIcons name="walk" size={13} color={colors.primary} />
+                <MaterialCommunityIcons name="walk" size={11} color={colors.primary} />
                 <Text style={[styles.mapLegText, { color: colors.text }]}>
-                  {leg.duration} · {leg.distance}
+                  {leg.duration.replace(" min", "m")} · {leg.distance
+                    .replace(" km", "km")
+                    .replace(" m", "m")}
                 </Text>
               </View>
             </Marker>
@@ -2965,20 +2972,20 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   mapLegLabel: {
-    minHeight: 28,
+    minHeight: 24,
     borderWidth: 1,
     borderRadius: 999,
-    paddingHorizontal: 7,
+    paddingHorizontal: 5,
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
     shadowColor: "#000",
-    shadowOpacity: 0.16,
-    shadowRadius: 4,
+    shadowOpacity: 0.11,
+    shadowRadius: 3,
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
-  mapLegText: { fontSize: 10, fontWeight: "800" },
+  mapLegText: { fontSize: 9, fontWeight: "800" },
   endpointMarker: {
     width: 62,
     height: 62,
