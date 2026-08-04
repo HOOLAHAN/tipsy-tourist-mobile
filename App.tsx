@@ -1551,42 +1551,10 @@ function AppContent() {
           showsUserLocation
           showsMyLocationButton={false}
         >
-          {!capturingShareMap && showSearchCoverage && searchCoverage && (
-            <>
-              <Polyline
-                coordinates={searchCoverage.path}
-                strokeColor={themeName === "light" ? "#0f172a" : "#e2e8f0"}
-                strokeWidth={3}
-                lineDashPattern={[2, 9]}
-              />
-              {searchCoverage.points.map((point, index) => {
-                const isPub = point.stopType === "pub";
-                return (
-                  <Circle
-                    key={`search-area-${index}`}
-                    center={point}
-                    radius={point.radius}
-                    fillColor={isPub ? "rgba(225,29,72,0.08)" : "rgba(124,58,237,0.08)"}
-                    strokeColor={isPub ? "rgba(225,29,72,0.72)" : "rgba(124,58,237,0.72)"}
-                    strokeWidth={2}
-                  />
-                );
-              })}
-              {searchCoverage.points.map((point, index) => (
-                <Circle
-                  key={`search-centre-${index}`}
-                  center={point}
-                  radius={28}
-                  fillColor={point.stopType === "pub" ? "#e11d48" : "#7c3aed"}
-                  strokeColor="#ffffff"
-                  strokeWidth={2}
-                />
-              ))}
-            </>
-          )}
           {route && (
             <>
               <Polyline
+                key="planned-route"
                 coordinates={route.coordinates}
                 strokeColor={colors.primary}
                 strokeWidth={6}
@@ -1628,6 +1596,40 @@ function AppContent() {
                   </Marker>
                 </>
               )}
+            </>
+          )}
+          {!capturingShareMap && showSearchCoverage && searchCoverage && (
+            <>
+              <Polyline
+                key="search-path"
+                coordinates={searchCoverage.path}
+                strokeColor={themeName === "light" ? "#0f172a" : "#e2e8f0"}
+                strokeWidth={3}
+                lineDashPattern={[2, 9]}
+              />
+              {searchCoverage.points.map((point, index) => {
+                const isPub = point.stopType === "pub";
+                return (
+                  <Circle
+                    key={`search-area-${index}`}
+                    center={point}
+                    radius={point.radius}
+                    fillColor={isPub ? "rgba(225,29,72,0.08)" : "rgba(124,58,237,0.08)"}
+                    strokeColor={isPub ? "rgba(225,29,72,0.72)" : "rgba(124,58,237,0.72)"}
+                    strokeWidth={2}
+                  />
+                );
+              })}
+              {searchCoverage.points.map((point, index) => (
+                <Circle
+                  key={`search-centre-${index}`}
+                  center={point}
+                  radius={28}
+                  fillColor={point.stopType === "pub" ? "#e11d48" : "#7c3aed"}
+                  strokeColor="#ffffff"
+                  strokeWidth={2}
+                />
+              ))}
             </>
           )}
         </MapView>
