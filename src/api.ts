@@ -143,13 +143,36 @@ async function nearbyCandidates(
     .map((place) => ({ ...place, stopType: type }));
 }
 
-function plotPoints(start: Coordinate, end: Coordinate, count: number) {
+const LOCAL_SEARCH_THRESHOLD_METRES = 1000;
+const LOCAL_SEARCH_RADIUS_METRES = 750;
+const LOCAL_SEARCH_POINT_OFFSET_METRES = 300;
+
+function plotPoints(
+  start: Coordinate,
+  end: Coordinate,
+  count: number,
+  routeDistance: number,
+) {
   if (count <= 0) return [];
+  const midpoint = {
+    latitude: (start.latitude + end.latitude) / 2,
+    longitude: (start.longitude + end.longitude) / 2,
+  };
   if (count === 1) {
-    return [{
-      latitude: (start.latitude + end.latitude) / 2,
-      longitude: (start.longitude + end.longitude) / 2,
-    }];
+    return [midpoint];
+  }
+  if (routeDistance < LOCAL_SEARCH_THRESHOLD_METRES) {
+    const latitudeOffset = LOCAL_SEARCH_POINT_OFFSET_METRES / 111320;
+    const longitudeOffset =
+      LOCAL_SEARCH_POINT_OFFSET_METRES /
+      (111320 * Math.max(Math.cos((midpoint.latitude * Math.PI) / 180), 0.2));
+    return Array.from({ length: count }, (_, index) => {
+      const angle = -Math.PI / 2 + (index * Math.PI * 2) / count;
+      return {
+        latitude: midpoint.latitude + Math.cos(angle) * latitudeOffset,
+        longitude: midpoint.longitude + Math.sin(angle) * longitudeOffset,
+      };
+    });
   }
   return Array.from({ length: count }, (_, index) => {
     const amount = index / (count - 1);
@@ -180,8 +203,12 @@ function adaptiveSearchRadius(
   end: Coordinate,
   searchCount: number,
 ) {
+  const routeDistance = distanceInMetres(start, end);
+  if (routeDistance < LOCAL_SEARCH_THRESHOLD_METRES) {
+    return LOCAL_SEARCH_RADIUS_METRES;
+  }
   const gaps = Math.max(searchCount - 1, 1);
-  const overlappingRadius = (distanceInMetres(start, end) / gaps) * 0.6;
+  const overlappingRadius = (routeDistance / gaps) * 0.6;
   return Math.round(Math.min(3000, Math.max(400, overlappingRadius)));
 }
 
@@ -321,7 +348,13 @@ export async function planRoute(
     geocode(finishText),
   ]);
   const stopTypes = mixedStopTypes(pubCount, attractionCount);
-  const points = plotPoints(origin, destination, stopTypes.length);
+  const routeDistance = distanceInMetres(origin, destination);
+  const points = plotPoints(
+    origin,
+    destination,
+    stopTypes.length,
+    routeDistance,
+  );
   const searchRadius = adaptiveSearchRadius(
     origin,
     destination,

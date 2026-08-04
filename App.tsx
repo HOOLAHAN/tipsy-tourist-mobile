@@ -10,6 +10,7 @@ import {
   Alert,
   Animated,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -234,6 +235,7 @@ function AutocompleteInput({
                 onChange(item.description);
                 setSuggestions([]);
                 setFocused(false);
+                Keyboard.dismiss();
               }}
               style={[
                 styles.suggestionRow,
@@ -1598,13 +1600,17 @@ function AppContent() {
               )}
             </>
           )}
-          {!capturingShareMap && showSearchCoverage && searchCoverage && (
+          {!capturingShareMap && searchCoverage && (
             <>
               <Polyline
                 key="search-path"
                 coordinates={searchCoverage.path}
-                strokeColor={themeName === "light" ? "#0f172a" : "#e2e8f0"}
-                strokeWidth={3}
+                strokeColor={showSearchCoverage
+                  ? themeName === "light"
+                    ? "#0f172a"
+                    : "#e2e8f0"
+                  : "rgba(0,0,0,0)"}
+                strokeWidth={showSearchCoverage ? 3 : 0}
                 lineDashPattern={[2, 9]}
               />
               {searchCoverage.points.map((point, index) => {
@@ -1614,9 +1620,17 @@ function AppContent() {
                     key={`search-area-${index}`}
                     center={point}
                     radius={point.radius}
-                    fillColor={isPub ? "rgba(225,29,72,0.08)" : "rgba(124,58,237,0.08)"}
-                    strokeColor={isPub ? "rgba(225,29,72,0.72)" : "rgba(124,58,237,0.72)"}
-                    strokeWidth={2}
+                    fillColor={showSearchCoverage
+                      ? isPub
+                        ? "rgba(225,29,72,0.08)"
+                        : "rgba(124,58,237,0.08)"
+                      : "rgba(0,0,0,0)"}
+                    strokeColor={showSearchCoverage
+                      ? isPub
+                        ? "rgba(225,29,72,0.72)"
+                        : "rgba(124,58,237,0.72)"
+                      : "rgba(0,0,0,0)"}
+                    strokeWidth={showSearchCoverage ? 2 : 0}
                   />
                 );
               })}
@@ -1625,9 +1639,13 @@ function AppContent() {
                   key={`search-centre-${index}`}
                   center={point}
                   radius={28}
-                  fillColor={point.stopType === "pub" ? "#e11d48" : "#7c3aed"}
-                  strokeColor="#ffffff"
-                  strokeWidth={2}
+                  fillColor={showSearchCoverage
+                    ? point.stopType === "pub"
+                      ? "#e11d48"
+                      : "#7c3aed"
+                    : "rgba(0,0,0,0)"}
+                  strokeColor={showSearchCoverage ? "#ffffff" : "rgba(0,0,0,0)"}
+                  strokeWidth={showSearchCoverage ? 2 : 0}
                 />
               ))}
             </>
