@@ -1,4 +1,6 @@
-const production = process.env.EAS_BUILD_PROFILE === "production";
+const buildProfile = process.env.EAS_BUILD_PROFILE;
+const production = buildProfile === "production";
+const development = buildProfile === "development";
 const androidMapsKey = production
   ? process.env.TIPSY_TOURIST_MOBILE_ANDROID_PRODUCTION
   : process.env.TIPSY_TOURIST_MOBILE_ANDROID_DEVELOPMENT;
@@ -8,10 +10,10 @@ const iosMapsKey = production
 
 export default {
   expo: {
-    name: "Tipsy Tourist",
+    name: development ? "Tipsy Tourist Dev" : "Tipsy Tourist",
     owner: "iainhoolahan",
     slug: "tipsy-tourist-mobile",
-    scheme: "tipsytourist",
+    scheme: development ? "tipsytourist-dev" : "tipsytourist",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/app-icon-map.png",
@@ -23,7 +25,9 @@ export default {
     },
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.tipsytourist.mobile",
+      bundleIdentifier: development
+        ? "com.tipsytourist.mobile.dev"
+        : "com.tipsytourist.mobile",
       config: { googleMapsApiKey: iosMapsKey },
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
@@ -32,7 +36,9 @@ export default {
       },
     },
     android: {
-      package: "com.tipsytourist.mobile",
+      package: development
+        ? "com.tipsytourist.mobile.dev"
+        : "com.tipsytourist.mobile",
       config: {
         googleMaps: { apiKey: androidMapsKey },
       },

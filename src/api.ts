@@ -20,7 +20,11 @@ const MAPS_KEY = production
   : process.env.EXPO_PUBLIC_TIPSY_TOURIST_MOBILE_SERVICES_DEVELOPMENT;
 const GOOGLE_MAPS_HEADERS =
   Platform.OS === "ios"
-    ? { "X-Ios-Bundle-Identifier": "com.tipsytourist.mobile" }
+    ? {
+        "X-Ios-Bundle-Identifier": production
+          ? "com.tipsytourist.mobile"
+          : "com.tipsytourist.mobile.dev",
+      }
     : undefined;
 
 export function getGoogleMapsRequestHeaders() {
