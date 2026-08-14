@@ -256,7 +256,6 @@ export async function getPlaceSuggestions(
   const query = new URLSearchParams({
     input: input.trim(),
     key: MAPS_KEY,
-    components: "country:gb",
   });
   const response = await fetch(
     `https://maps.googleapis.com/maps/api/place/autocomplete/json?${query}`,
