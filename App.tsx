@@ -1923,7 +1923,14 @@ function AppContent() {
               <ScrollView
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.plannerContent}
+                contentContainerStyle={[
+                  styles.plannerContent,
+                  {
+                    paddingBottom:
+                      (Platform.OS === "ios" ? 24 : 18) +
+                      (Platform.OS === "android" ? safeAreaInsets.bottom : 0),
+                  },
+                ]}
               >
                 <View
                   style={[
