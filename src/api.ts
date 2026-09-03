@@ -1,5 +1,4 @@
 import polyline from "@mapbox/polyline";
-import { Platform } from "react-native";
 import {
   Coordinate,
   Place,
@@ -14,23 +13,6 @@ import {
 const API_URL =
   process.env.EXPO_PUBLIC_API_URL ??
   "https://t5jalxqqsb.execute-api.eu-west-2.amazonaws.com";
-const production =
-  process.env.EXPO_PUBLIC_TIPSY_TOURIST_ENVIRONMENT === "production";
-const MAPS_KEY = production
-  ? process.env.EXPO_PUBLIC_TIPSY_TOURIST_MOBILE_SERVICES_PRODUCTION
-  : process.env.EXPO_PUBLIC_TIPSY_TOURIST_MOBILE_SERVICES_DEVELOPMENT;
-const GOOGLE_MAPS_HEADERS =
-  Platform.OS === "ios"
-    ? {
-        "X-Ios-Bundle-Identifier": production
-          ? "com.tipsytourist.mobile"
-          : "com.tipsytourist.mobile.dev",
-      }
-    : undefined;
-
-export function getGoogleMapsRequestHeaders() {
-  return GOOGLE_MAPS_HEADERS;
-}
 
 async function post<T>(path: string, body: object): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
@@ -38,8 +20,11 @@ async function post<T>(path: string, body: object): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(`Request failed (${response.status})`);
-  return response.json() as Promise<T>;
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || `Request failed (${response.status})`);
+  }
+  return payload as T;
 }
 
 export async function geocode(address: string): Promise<Coordinate> {
@@ -252,16 +237,11 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
 export async function getPlaceSuggestions(
   input: string,
 ): Promise<PlaceSuggestion[]> {
-  if (!MAPS_KEY || input.trim().length < 3) return [];
-  const query = new URLSearchParams({
-    input: input.trim(),
-    key: MAPS_KEY,
-  });
-  const response = await fetch(
-    `https://maps.googleapis.com/maps/api/place/autocomplete/json?${query}`,
-    { headers: GOOGLE_MAPS_HEADERS },
-  );
-  const data = await response.json();
+  if (input.trim().length < 3) return [];
+  const data = await post<{
+    status: string;
+    predictions?: any[];
+  }>("/autocomplete", { input: input.trim() });
   if (data.status !== "OK" && data.status !== "ZERO_RESULTS") return [];
   return (data.predictions ?? []).map((item: any) => ({
     place_id: item.place_id,
@@ -273,8 +253,8 @@ export async function getPlaceSuggestions(
 
 export function getPlacePhotoUrl(details: PlaceDetails | null, width = 900) {
   const reference = details?.photos?.[0]?.photo_reference;
-  return reference && MAPS_KEY
-    ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${width}&photo_reference=${encodeURIComponent(reference)}&key=${MAPS_KEY}`
+  return reference
+    ? `${API_URL}/place-photo?maxwidth=${width}&photo_reference=${encodeURIComponent(reference)}`
     : undefined;
 }
 
@@ -284,28 +264,15 @@ export async function routeThroughStops(
   stops: Place[],
   mode: TravelMode,
 ): Promise<RoutePlan> {
-  if (!MAPS_KEY)
-    throw new Error(
-      "Add the Tipsy Tourist mobile services key to your environment before planning a route.",
-    );
-  const waypoints = stops
-    .map(
-      (place) =>
-        `${place.geometry.location.lat},${place.geometry.location.lng}`,
-    )
-    .join("|");
-  const query = new URLSearchParams({
-    origin: `${origin.latitude},${origin.longitude}`,
-    destination: `${destination.latitude},${destination.longitude}`,
+  const data = await post<any>("/directions", {
+    origin,
+    destination,
     mode,
-    key: MAPS_KEY,
+    waypoints: stops.map((place) => ({
+      latitude: place.geometry.location.lat,
+      longitude: place.geometry.location.lng,
+    })),
   });
-  if (waypoints) query.set("waypoints", waypoints);
-  const response = await fetch(
-    `https://maps.googleapis.com/maps/api/directions/json?${query}`,
-    { headers: GOOGLE_MAPS_HEADERS },
-  );
-  const data = await response.json();
   if (data.status !== "OK")
     throw new Error(data.error_message || `No viable ${mode} route was found.`);
   const route = data.routes[0];
@@ -390,10 +357,6 @@ export async function planRoute(
   mode: TravelMode,
   onSearchCoverage?: (coverage: SearchCoverage) => void,
 ): Promise<RoutePlan> {
-  if (!MAPS_KEY)
-    throw new Error(
-      "Add the Tipsy Tourist mobile services key to your environment before planning a route.",
-    );
   const [origin, destination] = await Promise.all([
     geocode(startText),
     geocode(finishText),
@@ -476,10 +439,6 @@ export async function planLocalTour(
   mode: TravelMode,
   onSearchCoverage?: (coverage: SearchCoverage) => void,
 ): Promise<RoutePlan> {
-  if (!MAPS_KEY)
-    throw new Error(
-      "Add the Tipsy Tourist mobile services key to your environment before planning a route.",
-    );
   const centre = await geocode(locationText);
   const searchRadius = Math.round(Math.min(5000, Math.max(500, radius)));
   const stopTypes = mixedStopTypes(pubCount, attractionCount);
