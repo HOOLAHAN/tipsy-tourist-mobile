@@ -1781,6 +1781,8 @@ function AppContent() {
             style={[
               styles.actionDock,
               {
+                bottom:
+                  18 + (Platform.OS === "android" ? safeAreaInsets.bottom : 0),
                 backgroundColor: colors.card,
                 borderColor: colors.border,
                 shadowColor: colors.shadow,
