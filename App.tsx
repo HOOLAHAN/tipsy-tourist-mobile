@@ -86,6 +86,76 @@ function RainbowTitle() {
   );
 }
 
+function AndroidRadiusSlider({
+  value,
+  minimumValue,
+  maximumValue,
+  step,
+  onValueChange,
+  minimumTrackTintColor,
+  maximumTrackTintColor,
+}: {
+  value: number;
+  minimumValue: number;
+  maximumValue: number;
+  step: number;
+  onValueChange: (value: number) => void;
+  minimumTrackTintColor: string;
+  maximumTrackTintColor: string;
+}) {
+  const [width, setWidth] = useState(0);
+  const range = maximumValue - minimumValue;
+  const progress = range > 0 ? (value - minimumValue) / range : 0;
+
+  const updateFromTouch = (locationX: number) => {
+    if (width <= 0 || range <= 0) return;
+    const ratio = Math.max(0, Math.min(1, locationX / width));
+    const rawValue = minimumValue + ratio * range;
+    const steppedValue = minimumValue + Math.round((rawValue - minimumValue) / step) * step;
+    onValueChange(Math.max(minimumValue, Math.min(maximumValue, steppedValue)));
+  };
+
+  return (
+    <View
+      accessible
+      accessibilityLabel="Local tour search radius"
+      accessibilityRole="adjustable"
+      accessibilityValue={{ min: minimumValue, max: maximumValue, now: value }}
+      accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
+      onAccessibilityAction={(event) => {
+        const direction = event.nativeEvent.actionName === "increment" ? 1 : -1;
+        onValueChange(Math.max(minimumValue, Math.min(maximumValue, value + direction * step)));
+      }}
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+      onStartShouldSetResponder={() => true}
+      onMoveShouldSetResponder={() => true}
+      onResponderGrant={(event) => updateFromTouch(event.nativeEvent.locationX)}
+      onResponderMove={(event) => updateFromTouch(event.nativeEvent.locationX)}
+      onResponderTerminationRequest={() => false}
+      style={styles.radiusSlider}
+    >
+      <View
+        pointerEvents="none"
+        style={[styles.radiusSliderTrack, { backgroundColor: maximumTrackTintColor }]}
+      >
+        <View
+          style={[
+            styles.radiusSliderFill,
+            { backgroundColor: minimumTrackTintColor, width: `${progress * 100}%` },
+          ]}
+        />
+      </View>
+      <View
+        pointerEvents="none"
+        style={[
+          styles.radiusSliderThumb,
+          { backgroundColor: minimumTrackTintColor, left: `${progress * 100}%` },
+        ]}
+      />
+    </View>
+  );
+}
+
 function RoutePin({ label, color }: { label: string; color: string }) {
   return (
     <View style={styles.pinContainer}>
@@ -2024,17 +2094,30 @@ function AppContent() {
                           : `${localRadius} m`}
                       </Text>
                     </View>
-                    <Slider
-                      accessibilityLabel="Local tour search radius"
-                      minimumValue={500}
-                      maximumValue={5000}
-                      step={250}
-                      value={localRadius}
-                      onValueChange={setLocalRadius}
-                      minimumTrackTintColor={colors.primary}
-                      maximumTrackTintColor={colors.border}
-                      thumbTintColor={colors.primary}
-                    />
+                    {Platform.OS === "android" ? (
+                      <AndroidRadiusSlider
+                        minimumValue={500}
+                        maximumValue={5000}
+                        step={250}
+                        value={localRadius}
+                        onValueChange={setLocalRadius}
+                        minimumTrackTintColor={colors.primary}
+                        maximumTrackTintColor={colors.border}
+                      />
+                    ) : (
+                      <Slider
+                        accessibilityLabel="Local tour search radius"
+                        style={styles.radiusSlider}
+                        minimumValue={500}
+                        maximumValue={5000}
+                        step={250}
+                        value={localRadius}
+                        onValueChange={setLocalRadius}
+                        minimumTrackTintColor={colors.primary}
+                        maximumTrackTintColor={colors.border}
+                        thumbTintColor={colors.primary}
+                      />
+                    )}
                     <View style={styles.radiusRangeLabels}>
                       <Text style={[styles.radiusRangeText, { color: colors.muted }]}>500 m</Text>
                       <Text style={[styles.radiusRangeText, { color: colors.muted }]}>5 km</Text>
@@ -2649,6 +2732,29 @@ const styles = StyleSheet.create({
   },
   radiusHelp: { fontSize: 11, marginTop: 2 },
   radiusValue: { fontSize: 17, fontWeight: "800" },
+  radiusSlider: {
+    width: "100%",
+    height: 40,
+    justifyContent: "center",
+  },
+  radiusSliderTrack: {
+    height: 4,
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  radiusSliderFill: {
+    height: "100%",
+  },
+  radiusSliderThumb: {
+    position: "absolute",
+    width: 22,
+    height: 22,
+    marginLeft: -11,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: "#ffffff",
+    elevation: 3,
+  },
   radiusRangeLabels: {
     flexDirection: "row",
     justifyContent: "space-between",
