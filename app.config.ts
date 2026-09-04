@@ -46,7 +46,7 @@ export default {
       adaptiveIcon: {
         backgroundColor: "#fffaf1",
         backgroundImage: "./assets/android-icon-map-background.png",
-        foregroundImage: "./assets/android-icon-foreground.png",
+        foregroundImage: "./assets/android-icon-foreground-safe.png",
         monochromeImage: "./assets/android-icon-monochrome.png",
       },
       permissions: ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"],
