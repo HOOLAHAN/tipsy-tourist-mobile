@@ -36,6 +36,7 @@ export default {
       },
     },
     android: {
+      newArchEnabled: false,
       package: development
         ? "com.tipsytourist.mobile.dev"
         : "com.tipsytourist.mobile",

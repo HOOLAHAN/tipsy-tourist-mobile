@@ -1694,27 +1694,39 @@ function AppContent() {
             <Marker
               key={`walking-leg-${index}`}
               coordinate={leg.midpoint}
-              anchor={{ x: 0.5, y: 0.5 }}
+              anchor={{ x: 0.5, y: index % 2 === 0 ? 1 : 0 }}
               zIndex={6}
             >
               <View
                 pointerEvents="none"
                 style={[
-                  styles.mapLegLabel,
+                  styles.mapLegMarkerContainer,
                   {
-                    backgroundColor: colors.card,
-                    borderColor: colors.primary,
-                    opacity: showWalkingLegs ? 1 : 0,
-                    transform: [{ translateY: index % 2 === 0 ? -18 : 18 }],
+                    paddingTop: index % 2 === 0 ? 0 : 18,
+                    paddingBottom: index % 2 === 0 ? 18 : 0,
                   },
                 ]}
               >
-                <MaterialCommunityIcons name="walk" size={11} color={colors.primary} />
-                <Text style={[styles.mapLegText, { color: colors.text }]}>
-                  {leg.duration.replace(" min", "m")} · {leg.distance
-                    .replace(" km", "km")
-                    .replace(" m", "m")}
-                </Text>
+                <View
+                  style={[
+                    styles.mapLegLabel,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.primary,
+                      opacity: showWalkingLegs ? 1 : 0,
+                    },
+                  ]}
+                >
+                  <MaterialCommunityIcons name="walk" size={11} color={colors.primary} />
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.mapLegText, { color: colors.text }]}
+                  >
+                    {leg.duration.replace(" min", "m")} · {leg.distance
+                      .replace(" km", "km")
+                      .replace(" m", "m")}
+                  </Text>
+                </View>
               </View>
             </Marker>
           ))}
@@ -3001,6 +3013,9 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
+  },
+  mapLegMarkerContainer: {
+    paddingHorizontal: 6,
   },
   mapLegText: { fontSize: 9, fontWeight: "800" },
   endpointMarker: {
