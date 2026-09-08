@@ -338,129 +338,90 @@ function AutocompleteInput({
   );
 }
 
-function StopCounter({
-  label,
-  min = 0,
-  max,
-  value,
-  icon,
+function CategoryQuantitySelector({
+  quantities,
+  total,
   onChange,
   colors,
 }: {
-  label: string;
-  min?: number;
-  max: number;
-  value: number;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
-  onChange: (value: number) => void;
+  quantities: CategoryQuantities;
+  total: number;
+  onChange: (category: StopCategory, value: number) => void;
   colors: (typeof themes)[ThemeName];
 }) {
   return (
     <View
       style={[
-        styles.stopCounter,
+        styles.categoryQuantityGrid,
         { backgroundColor: colors.surface, borderColor: colors.border },
       ]}
     >
-      <View style={styles.counterHeading}>
-        <MaterialCommunityIcons name={icon} size={22} color={colors.primary} />
-        <Text style={[styles.counterTitle, { color: colors.text }]}>
-          {label}
-        </Text>
-        <Text style={[styles.maxLabel, { color: colors.muted }]}>
-          Max {max}
-        </Text>
-      </View>
-      <View style={styles.counterButtons}>
-        <Pressable
-          disabled={value <= min}
-          onPress={() => onChange(Math.max(min, value - 1))}
-          style={[
-            styles.counterCircle,
-            {
-              borderColor: colors.border,
-              backgroundColor: colors.card,
-              opacity: value <= min ? 0.35 : 1,
-            },
-          ]}
-        >
-          <Text style={[styles.counterSymbol, { color: colors.primary }]}>
-            −
-          </Text>
-        </Pressable>
-        <View
-          style={[
-            styles.counterValue,
-            { borderColor: colors.border, backgroundColor: colors.card },
-          ]}
-        >
-          <Text style={[styles.counterNumber, { color: colors.text }]}>
-            {value}
-          </Text>
-        </View>
-        <Pressable
-          disabled={value >= max}
-          onPress={() => onChange(Math.min(max, value + 1))}
-          style={[
-            styles.counterCircle,
-            styles.counterCircleFilled,
-            {
-              backgroundColor: colors.primary,
-              borderColor: colors.primary,
-              opacity: value >= max ? 0.35 : 1,
-            },
-          ]}
-        >
-          <Text style={[styles.counterSymbol, { color: "#fff" }]}>+</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function InterestSelector({
-  selected,
-  onToggle,
-  colors,
-}: {
-  selected: StopCategory[];
-  onToggle: (category: StopCategory) => void;
-  colors: (typeof themes)[ThemeName];
-}) {
-  return (
-    <View style={styles.interestGrid}>
-      {STOP_CATEGORIES.map((category) => {
-        const active = selected.includes(category.id);
+      {STOP_CATEGORIES.map((category, index) => {
+        const value = quantities[category.id];
+        const active = value > 0;
+        const cannotAdd = value >= 5 || total >= 10;
         return (
-          <Pressable
+          <View
             key={category.id}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: active }}
-            onPress={() => onToggle(category.id)}
             style={[
-              styles.interestChip,
+              styles.categoryQuantityCard,
               {
-                backgroundColor: active ? category.background : colors.surface,
-                borderColor: active ? category.color : colors.border,
+                borderBottomColor: colors.border,
+                borderBottomWidth: index === STOP_CATEGORIES.length - 1 ? 0 : StyleSheet.hairlineWidth,
               },
             ]}
           >
+            <View
+              style={[
+                styles.categoryActiveIndicator,
+                { backgroundColor: active ? category.color : "transparent" },
+              ]}
+            />
             <MaterialCommunityIcons
               name={category.icon as keyof typeof MaterialCommunityIcons.glyphMap}
-              size={19}
+              size={22}
               color={active ? category.color : colors.muted}
             />
             <Text
               numberOfLines={1}
               style={[
-                styles.interestChipText,
-                { color: active ? category.color : colors.text },
+                styles.categoryQuantityLabel,
+                { color: colors.text, fontWeight: active ? "700" : "600" },
               ]}
             >
               {category.label}
             </Text>
-            {active && <Ionicons name="checkmark-circle" size={17} color={category.color} />}
-          </Pressable>
+            <View style={styles.compactStepper}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Remove one ${category.singular}`}
+                accessibilityState={{ disabled: value === 0 }}
+                disabled={value === 0}
+                hitSlop={8}
+                onPress={() => onChange(category.id, value - 1)}
+                style={[styles.compactStepButton, { opacity: value === 0 ? 0.3 : 1 }]}
+              >
+                <Text style={[styles.compactStepSymbol, { color: colors.text }]}>−</Text>
+              </Pressable>
+              <Text style={[styles.compactStepValue, { color: active ? colors.text : colors.muted }]}>
+                {value}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Add one ${category.singular}`}
+                accessibilityState={{ disabled: cannotAdd }}
+                disabled={cannotAdd}
+                hitSlop={8}
+                onPress={() => onChange(category.id, value + 1)}
+                style={[
+                  styles.compactStepButton,
+                  { backgroundColor: colors.primary, opacity: cannotAdd ? 0.3 : 1 },
+                ]}
+              >
+                <Text style={[styles.compactStepSymbol, { color: "#fff" }]}>+</Text>
+              </Pressable>
+            </View>
+          </View>
         );
       })}
     </View>
@@ -1396,26 +1357,6 @@ function AppContent() {
         `${coordinate.latitude.toFixed(6)}, ${coordinate.longitude.toFixed(6)}`,
       );
   };
-  const toggleCategory = (category: StopCategory) => {
-    setCategoryQuantities((current) => {
-      const currentStopCount = Object.values(current).reduce(
-        (total, quantity) => total + quantity,
-        0,
-      );
-      if (current[category] > 0) {
-        if (currentStopCount === current[category]) {
-          Alert.alert("Keep one interest", "Your itinerary needs at least one selected interest.");
-          return current;
-        }
-        return { ...current, [category]: 0 };
-      }
-      if (currentStopCount >= 10) {
-        Alert.alert("Maximum 10 stops", "Reduce another interest before adding this one.");
-        return current;
-      }
-      return { ...current, [category]: 1 };
-    });
-  };
   const setCategoryQuantity = (category: StopCategory, quantity: number) => {
     setCategoryQuantities((current) => {
       const otherStops = Object.entries(current).reduce(
@@ -1424,7 +1365,7 @@ function AppContent() {
       );
       return {
         ...current,
-        [category]: Math.min(5, Math.max(1, Math.min(quantity, 10 - otherStops))),
+        [category]: Math.min(5, Math.max(0, Math.min(quantity, 10 - otherStops))),
       };
     });
   };
@@ -2217,37 +2158,19 @@ function AppContent() {
                     </View>
                   </View>
                 )}
-                <Text style={[styles.sectionLabel, { color: colors.muted }]}>
-                  WHAT ARE YOU INTO?
-                </Text>
-                <Text style={[styles.interestHelp, { color: colors.muted }]}>Choose interests, then select up to 5 of each. Your itinerary can contain up to 10 stops.</Text>
-                <InterestSelector
-                  selected={selectedCategories}
-                  onToggle={toggleCategory}
-                  colors={colors}
-                />
                 <View style={styles.stopCountHeading}>
-                  <Text style={[styles.sectionLabel, { color: colors.muted }]}>STOPS BY INTEREST</Text>
+                  <View>
+                    <Text style={[styles.sectionLabel, { color: colors.muted }]}>CHOOSE YOUR STOPS</Text>
+                    <Text style={[styles.interestHelp, { color: colors.muted }]}>Up to 5 of each type and 10 stops in total.</Text>
+                  </View>
                   <Text style={[styles.totalStopCount, { color: colors.primary }]}>{stopCount}/10</Text>
                 </View>
-                <View style={styles.categoryCounters}>
-                  {selectedCategories.map((category) => {
-                    const details = categoryDetails(category);
-                    const otherStops = stopCount - categoryQuantities[category];
-                    return (
-                      <StopCounter
-                        key={category}
-                        label={details.label}
-                        min={1}
-                        max={Math.min(5, 10 - otherStops)}
-                        value={categoryQuantities[category]}
-                        icon={details.icon as keyof typeof MaterialCommunityIcons.glyphMap}
-                        onChange={(quantity) => setCategoryQuantity(category, quantity)}
-                        colors={colors}
-                      />
-                    );
-                  })}
-                </View>
+                <CategoryQuantitySelector
+                  quantities={categoryQuantities}
+                  total={stopCount}
+                  onChange={setCategoryQuantity}
+                  colors={colors}
+                />
                 <Pressable
                   disabled={loading}
                   onPress={submit}
@@ -3115,64 +3038,45 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   totalStopCount: { fontSize: 16, fontWeight: "800" },
-  categoryCounters: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 7,
-  },
-  stopCounter: {
-    width: "48.8%",
+  categoryQuantityGrid: {
     borderWidth: 1,
-    borderRadius: 20,
-    padding: 9,
-    minHeight: 112,
+    borderRadius: 18,
+    overflow: "hidden",
   },
-  counterHeading: { flexDirection: "row", alignItems: "center", gap: 6 },
-  counterTitle: { fontSize: 15, fontWeight: "700", flex: 1 },
-  maxLabel: { fontSize: 11, width: 34 },
-  counterButtons: {
-    flex: 1,
+  categoryQuantityCard: {
+    minHeight: 49,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingLeft: 15,
+    paddingRight: 10,
+    gap: 10,
+  },
+  categoryActiveIndicator: {
+    position: "absolute",
+    left: 0,
+    top: 10,
+    bottom: 10,
+    width: 3,
+    borderTopRightRadius: 3,
+    borderBottomRightRadius: 3,
+  },
+  categoryQuantityLabel: { flex: 1, fontSize: 14 },
+  compactStepper: {
+    width: 132,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 6,
   },
-  counterCircle: {
-    width: 42,
-    height: 42,
-    borderWidth: 1,
-    borderRadius: 21,
+  compactStepButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
   },
-  counterCircleFilled: { backgroundColor: BLUE, borderColor: BLUE },
-  counterSymbol: { fontSize: 25, lineHeight: 27, fontWeight: "600" },
-  counterValue: {
-    minWidth: 42,
-    height: 42,
-    borderWidth: 1,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  counterNumber: { fontSize: 20, fontWeight: "700" },
+  compactStepSymbol: { fontSize: 20, lineHeight: 21, fontWeight: "700" },
+  compactStepValue: { minWidth: 34, textAlign: "center", fontSize: 17, fontWeight: "800" },
   interestHelp: { fontSize: 12, lineHeight: 17, marginTop: -2 },
-  interestGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 7,
-  },
-  interestChip: {
-    width: "48.8%",
-    minHeight: 42,
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-  },
-  interestChipText: { flex: 1, fontSize: 13, fontWeight: "700" },
   primaryButton: {
     minHeight: 50,
     borderRadius: 999,
