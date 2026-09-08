@@ -55,7 +55,13 @@ import {
   RoutePlan,
   RouteLeg,
   SearchCoverage,
+  StopCategory,
 } from "./src/types";
+import {
+  categoryDetails,
+  DEFAULT_CATEGORIES,
+  STOP_CATEGORIES,
+} from "./src/categories";
 
 const LONDON: Region = {
   latitude: 51.5033,
@@ -177,6 +183,17 @@ function SummaryChip({
   return (
     <View style={[styles.summaryChip, { backgroundColor }]}>
       <Text style={[styles.summaryChipText, { color }]}>{label}</Text>
+    </View>
+  );
+}
+
+function CategoryBadge({ category }: { category: StopCategory }) {
+  const details = categoryDetails(category);
+  return (
+    <View style={[styles.typeBadge, { backgroundColor: details.background }]}>
+      <Text style={{ color: details.color, fontWeight: "700" }}>
+        {details.singular.toUpperCase()}
+      </Text>
     </View>
   );
 }
@@ -396,6 +413,55 @@ function StopCounter({
           <Text style={[styles.counterSymbol, { color: "#fff" }]}>+</Text>
         </Pressable>
       </View>
+    </View>
+  );
+}
+
+function InterestSelector({
+  selected,
+  onToggle,
+  colors,
+}: {
+  selected: StopCategory[];
+  onToggle: (category: StopCategory) => void;
+  colors: (typeof themes)[ThemeName];
+}) {
+  return (
+    <View style={styles.interestGrid}>
+      {STOP_CATEGORIES.map((category) => {
+        const active = selected.includes(category.id);
+        return (
+          <Pressable
+            key={category.id}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: active }}
+            onPress={() => onToggle(category.id)}
+            style={[
+              styles.interestChip,
+              {
+                backgroundColor: active ? category.background : colors.surface,
+                borderColor: active ? category.color : colors.border,
+              },
+            ]}
+          >
+            <MaterialCommunityIcons
+              name={category.icon as keyof typeof MaterialCommunityIcons.glyphMap}
+              size={19}
+              color={active ? category.color : colors.muted}
+            />
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.interestChipText,
+                { color: active ? category.color : colors.text },
+              ]}
+            >
+              {category.label}
+            </Text>
+            {active && <Ionicons name="checkmark-circle" size={17} color={category.color} />}
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -678,23 +744,7 @@ function PlaceCard({
         >
           {details?.name ?? place.name}
         </Text>
-        <View
-          style={[
-            styles.typeBadge,
-            {
-              backgroundColor: place.stopType === "pub" ? "#ffd9db" : "#e9d5ff",
-            },
-          ]}
-        >
-          <Text
-            style={{
-              color: place.stopType === "pub" ? "#9f3034" : "#6b21a8",
-              fontWeight: "700",
-            }}
-          >
-            {place.stopType.toUpperCase()}
-          </Text>
-        </View>
+        <CategoryBadge category={place.category} />
       </View>
       {onMove && (
         <View style={styles.moveButtons}>
@@ -785,7 +835,8 @@ function ItineraryRow({
   updating?: boolean;
   leg?: RouteLeg;
 }) {
-  const stopColor = place.stopType === "pub" ? "#e11d48" : "#7c3aed";
+  const category = categoryDetails(place.category);
+  const stopColor = category.color;
   const translateY = useRef(new Animated.Value(0)).current;
   const activeRef = useRef(false);
   const capturedRef = useRef(false);
@@ -894,12 +945,12 @@ function ItineraryRow({
         <View style={styles.itineraryCopy}>
           <View style={styles.itineraryMeta}>
             <MaterialCommunityIcons
-              name={place.stopType === "pub" ? "glass-mug-variant" : "camera"}
+              name={category.icon as keyof typeof MaterialCommunityIcons.glyphMap}
               size={15}
               color={stopColor}
             />
             <Text style={[styles.itineraryType, { color: stopColor }]}>
-              {place.stopType === "pub" ? "PUB" : "ATTRACTION"}
+              {category.singular.toUpperCase()}
             </Text>
           </View>
           <Text
@@ -979,7 +1030,7 @@ const ShareCard = forwardRef<
         longitude: place.geometry.location.lng,
       },
       label: String(index + 1),
-      color: place.stopType === "pub" ? "#e11d48" : "#7c3aed",
+      color: categoryDetails(place.category).color,
     })),
     {
       key: "finish",
@@ -999,7 +1050,7 @@ const ShareCard = forwardRef<
         <View style={{ flex: 1 }}>
           <RainbowTitle />
           <Text style={styles.shareStrapline}>
-            Your pub-and-sights adventure
+            Your personalised walking itinerary
           </Text>
         </View>
       </View>
@@ -1046,7 +1097,8 @@ const ShareCard = forwardRef<
       </View>
       <View style={styles.shareStopGrid}>
         {route.stops.map((place, index) => {
-          const color = place.stopType === "pub" ? "#e11d48" : "#7c3aed";
+          const category = categoryDetails(place.category);
+          const color = category.color;
           return (
             <View key={place.place_id} style={styles.shareStop}>
               <View
@@ -1062,7 +1114,7 @@ const ShareCard = forwardRef<
                   numberOfLines={1}
                   style={[styles.shareStopType, { color }]}
                 >
-                  {place.stopType === "pub" ? "PUB" : "ATTRACTION"}
+                  {category.singular.toUpperCase()}
                   {place.rating ? ` · ★ ${place.rating}` : ""}
                 </Text>
                 {!!place.vicinity && (
@@ -1108,8 +1160,10 @@ function AppContent() {
   const [finish, setFinish] = useState("");
   const [plannerMode, setPlannerMode] = useState<"journey" | "local">("journey");
   const [localRadius, setLocalRadius] = useState(1500);
-  const [pubs, setPubs] = useState(1);
-  const [attractions, setAttractions] = useState(1);
+  const [selectedCategories, setSelectedCategories] = useState<StopCategory[]>(
+    DEFAULT_CATEGORIES,
+  );
+  const [stopCount, setStopCount] = useState(4);
   const mode = "walking" as const;
   const [route, setRoute] = useState<RoutePlan | null>(null);
   const [searchCoverage, setSearchCoverage] = useState<SearchCoverage | null>(null);
@@ -1335,11 +1389,25 @@ function AppContent() {
         `${coordinate.latitude.toFixed(6)}, ${coordinate.longitude.toFixed(6)}`,
       );
   };
+  const toggleCategory = (category: StopCategory) => {
+    setSelectedCategories((current) => {
+      if (current.includes(category)) {
+        if (current.length === 1) {
+          Alert.alert("Keep one interest", "Your itinerary needs at least one selected interest.");
+          return current;
+        }
+        return current.filter((item) => item !== category);
+      }
+      const next = [...current, category];
+      setStopCount((count) => Math.max(count, next.length));
+      return next;
+    });
+  };
   const submit = async () => {
-    if (pubs + attractions < 1)
+    if (selectedCategories.length < 1)
       return Alert.alert(
-        "Choose at least one stop",
-        "Add a pub or sight before planning your walking tour.",
+        "Choose an interest",
+        "Select at least one kind of place for your walking itinerary.",
       );
     if (!start.trim() || (plannerMode === "journey" && !finish.trim()))
       return Alert.alert(
@@ -1356,16 +1424,16 @@ function AppContent() {
         ? await planLocalTour(
             start,
             localRadius,
-            pubs,
-            attractions,
+            selectedCategories,
+            stopCount,
             mode,
             setSearchCoverage,
           )
         : await planRoute(
             start,
             finish,
-            pubs,
-            attractions,
+            selectedCategories,
+            stopCount,
             mode,
             setSearchCoverage,
           );
@@ -1511,15 +1579,15 @@ function AppContent() {
       setUpdatingStopId(null);
     }
   };
-  const addStop = async (stopType: Place["stopType"]) => {
+  const addStop = async (category: StopCategory) => {
     if (!route || updatingStopId) return;
-    const typeCount = route.stops.filter(
-      (stop) => stop.stopType === stopType,
+    const categoryCount = route.stops.filter(
+      (stop) => stop.category === category,
     ).length;
-    if (typeCount >= 10) {
+    if (route.stops.length >= 10 || categoryCount >= 5) {
       Alert.alert(
         "Stop limit reached",
-        `A route can contain up to 10 ${stopType === "pub" ? "pubs" : "attractions"}.`,
+        "A walking itinerary can contain up to 10 stops and up to 5 from one interest.",
       );
       return;
     }
@@ -1555,7 +1623,7 @@ function AppContent() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       const place = await findAdditionalStop(
-        stopType,
+        category,
         point,
         route.stops.map((stop) => stop.place_id),
       );
@@ -1574,11 +1642,17 @@ function AppContent() {
   };
   const chooseStopToAdd = () => {
     if (!route || updatingStopId) return;
-    Alert.alert("Add a stop", "What would you like along the route?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Pub", onPress: () => addStop("pub") },
-      { text: "Attraction", onPress: () => addStop("attraction") },
-    ]);
+    Alert.alert(
+      "Add a stop",
+      "What would you like along the route?",
+      [
+        ...STOP_CATEGORIES.map((category) => ({
+          text: category.label,
+          onPress: () => addStop(category.id),
+        })),
+        { text: "Cancel", style: "cancel" as const },
+      ],
+    );
   };
   const travelLabel = "walking";
   const shareItinerary = async () => {
@@ -1623,7 +1697,7 @@ function AppContent() {
       await Sharing.shareAsync(cardUri, {
         mimeType: "image/png",
         UTI: "public.png",
-        dialogTitle: "Share your Tipsy Tour",
+        dialogTitle: "Share your walking itinerary",
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
@@ -1684,7 +1758,7 @@ function AppContent() {
                     >
                       <RoutePin
                         label={String(index + 1)}
-                        color={place.stopType === "pub" ? "#e11d48" : "#7c3aed"}
+                        color={categoryDetails(place.category).color}
                       />
                     </Marker>
                   ))}
@@ -1715,8 +1789,10 @@ function AppContent() {
                 zIndex={2}
               />
               {searchCoverage.points.map((point, index) => {
-                const isPub = point.stopType === "pub";
-                const isLocal = point.stopType === "local";
+                const isLocal = point.category === "local";
+                const categoryColor = isLocal
+                  ? "#3b82f6"
+                  : categoryDetails(point.category as StopCategory).color;
                 return (
                   <Circle
                     key={`search-area-${index}`}
@@ -1725,16 +1801,12 @@ function AppContent() {
                     fillColor={showSearchCoverage
                       ? isLocal
                         ? "rgba(59,130,246,0.05)"
-                        : isPub
-                          ? "rgba(225,29,72,0.035)"
-                          : "rgba(124,58,237,0.035)"
+                        : `${categoryColor}10`
                       : "rgba(0,0,0,0)"}
                     strokeColor={showSearchCoverage
                       ? isLocal
                         ? "rgba(59,130,246,0.42)"
-                        : isPub
-                          ? "rgba(225,29,72,0.34)"
-                          : "rgba(124,58,237,0.34)"
+                        : `${categoryColor}66`
                       : "rgba(0,0,0,0)"}
                     strokeWidth={showSearchCoverage ? 2 : 0}
                     zIndex={1}
@@ -1747,11 +1819,9 @@ function AppContent() {
                   center={point}
                   radius={14}
                   fillColor={showSearchCoverage && !route
-                    ? point.stopType === "local"
+                    ? point.category === "local"
                       ? "#3b82f6"
-                      : point.stopType === "pub"
-                        ? "#e11d48"
-                        : "#7c3aed"
+                      : categoryDetails(point.category as StopCategory).color
                     : "rgba(0,0,0,0)"}
                   strokeColor={showSearchCoverage && !route ? "#ffffff" : "rgba(0,0,0,0)"}
                   strokeWidth={showSearchCoverage && !route ? 1 : 0}
@@ -1837,7 +1907,7 @@ function AppContent() {
                     >
                       {route
                         ? `${route.distance} · ${route.duration} · ${travelLabel}`
-                        : "Pubs, sights, one brilliant route"}
+                        : "Your interests, one brilliant route"}
                     </Text>
                   </View>
                 </View>
@@ -2125,25 +2195,25 @@ function AppContent() {
                   </View>
                 )}
                 <Text style={[styles.sectionLabel, { color: colors.muted }]}>
-                  STOPS ALONG THE WAY
+                  WHAT ARE YOU INTO?
+                </Text>
+                <Text style={[styles.interestHelp, { color: colors.muted }]}>Choose one or more interests and we’ll mix them into your itinerary.</Text>
+                <InterestSelector
+                  selected={selectedCategories}
+                  onToggle={toggleCategory}
+                  colors={colors}
+                />
+                <Text style={[styles.sectionLabel, { color: colors.muted }]}>
+                  NUMBER OF STOPS
                 </Text>
                 <View style={styles.countersRow}>
                   <StopCounter
-                    label="Pubs"
-                    min={attractions === 0 ? 1 : 0}
-                    max={10}
-                    value={pubs}
-                    icon="glass-cocktail"
-                    onChange={setPubs}
-                    colors={colors}
-                  />
-                  <StopCounter
-                    label="Sights"
-                    min={pubs === 0 ? 1 : 0}
-                    max={10}
-                    value={attractions}
-                    icon="camera"
-                    onChange={setAttractions}
+                    label="Stops"
+                    min={selectedCategories.length}
+                    max={8}
+                    value={stopCount}
+                    icon="map-marker-path"
+                    onChange={setStopCount}
                     colors={colors}
                   />
                 </View>
@@ -2160,17 +2230,9 @@ function AppContent() {
                     <ActivityIndicator color="#fff" />
                   ) : (
                     <>
-                      <MaterialCommunityIcons
-                        name="glass-mug-variant"
-                        size={21}
-                        color="#fff"
-                      />
+                      <MaterialCommunityIcons name="map-marker-path" size={21} color="#fff" />
                       <Text style={styles.primaryButtonText}>
-                        {route
-                          ? "Update my route"
-                          : pubs === 0
-                            ? "Plan my Sober Sejour"
-                            : "Plan my Tipsy Tour"}
+                        {route ? "Update my itinerary" : "Plan my walking itinerary"}
                       </Text>
                       <Ionicons name="arrow-forward" size={21} color="#fff" />
                     </>
@@ -2246,8 +2308,8 @@ function AppContent() {
                     </View>
                   </View>
                   <Text style={[styles.infoIntro, { color: colors.text }]}>
-                    Plan mixed pub-and-sights routes, reorder stops and share
-                    your trip.
+                    Create personalised walking itineraries from the places and
+                    activities that interest you.
                   </Text>
                   <Text style={[styles.sectionLabel, { color: colors.muted }]}>
                     QUICK INFORMATION
@@ -2260,13 +2322,13 @@ function AppContent() {
                         "help",
                         "Help",
                         "help-buoy-outline",
-                        "Choose start and finish points or a local area, select your stops, then plan your walking tour. Tap pins for venue details or open the itinerary to review and reorder stops.",
+                        "Choose start and finish points or a local area, select your interests and number of stops, then plan your walking itinerary. Tap pins for place details or open the itinerary to review and reorder stops.",
                       ],
                       [
                         "safety",
                         "Safety",
                         "shield-checkmark-outline",
-                        "For people of legal drinking age. Drink responsibly, check venue and travel information, and never drive or cycle while impaired.",
+                        "Check opening information, accessibility, route conditions and local guidance before setting out. Stay aware of your surroundings and use designated walking routes.",
                       ],
                       [
                         "privacy",
@@ -3053,6 +3115,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   counterNumber: { fontSize: 20, fontWeight: "700" },
+  interestHelp: { fontSize: 12, lineHeight: 17, marginTop: -2 },
+  interestGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+  },
+  interestChip: {
+    width: "48.8%",
+    minHeight: 42,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  interestChipText: { flex: 1, fontSize: 13, fontWeight: "700" },
   primaryButton: {
     minHeight: 50,
     borderRadius: 999,

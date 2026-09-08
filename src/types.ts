@@ -1,7 +1,17 @@
 export type Coordinate = { latitude: number; longitude: number };
 
+export type StopCategory =
+  | "landmarks"
+  | "museums"
+  | "galleries"
+  | "parks"
+  | "cafes"
+  | "food"
+  | "shopping"
+  | "markets";
+
 export type SearchCoveragePoint = Coordinate & {
-  stopType: "pub" | "attraction" | "local";
+  category: StopCategory | "local";
   radius: number;
 };
 
@@ -21,7 +31,7 @@ export type Place = {
   price_level?: number;
   business_status?: string;
   types?: string[];
-  stopType: "pub" | "attraction";
+  category: StopCategory;
   geometry: { location: { lat: number; lng: number } };
 };
 

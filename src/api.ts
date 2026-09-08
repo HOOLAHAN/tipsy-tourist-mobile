@@ -7,6 +7,7 @@ import {
   RoutePlan,
   RouteLeg,
   SearchCoverage,
+  StopCategory,
   TravelMode,
 } from "./types";
 
@@ -35,16 +36,16 @@ export async function geocode(address: string): Promise<Coordinate> {
   return { latitude: result.location.lat, longitude: result.location.lng };
 }
 
-function distanceSquared(place: Omit<Place, "stopType">, point: Coordinate) {
+function distanceSquared(place: Omit<Place, "category">, point: Coordinate) {
   const latitude = place.geometry.location.lat - point.latitude;
   const longitude = place.geometry.location.lng - point.longitude;
   return latitude * latitude + longitude * longitude;
 }
 
 function candidateScore(
-  place: Omit<Place, "stopType">,
+  place: Omit<Place, "category">,
   point: Coordinate,
-  type: Place["stopType"],
+  category: StopCategory,
 ) {
   const rating = place.rating ?? 0;
   const reviews = place.user_ratings_total ?? 0;
@@ -53,19 +54,24 @@ function candidateScore(
     2.5,
     Math.sqrt(distanceSquared(place, point)) * 150,
   );
-  const specificity =
-    type === "attraction" &&
-    place.types?.some((item) =>
-      ["museum", "art_gallery", "tourist_attraction", "park"].includes(item),
-    )
-      ? 0.6
-      : 0;
+  const expectedTypes: Partial<Record<StopCategory, string[]>> = {
+    landmarks: ["tourist_attraction"],
+    museums: ["museum"],
+    galleries: ["art_gallery"],
+    parks: ["park"],
+    cafes: ["cafe"],
+    food: ["restaurant"],
+    shopping: ["store", "shopping_mall"],
+  };
+  const specificity = place.types?.some((item) =>
+    expectedTypes[category]?.includes(item),
+  ) ? 0.6 : 0;
   return quality + specificity - proximity;
 }
 
 function isQualityCandidate(
-  place: Omit<Place, "stopType">,
-  type: Place["stopType"],
+  place: Omit<Place, "category">,
+  category: StopCategory,
 ) {
   if (
     !place.place_id ||
@@ -76,24 +82,17 @@ function isQualityCandidate(
   const rating = place.rating ?? 0;
   const reviews = place.user_ratings_total ?? 0;
   const types = place.types ?? [];
-  const unsuitableAttraction =
-    type === "attraction" &&
-    types.some((item) =>
-      [
-        "lodging",
-        "travel_agency",
-        "real_estate_agency",
-        "local_government_office",
-      ].includes(item),
-    );
+  const unsuitable = types.some((item) =>
+    ["lodging", "travel_agency", "real_estate_agency"].includes(item),
+  );
   return (
-    !unsuitableAttraction &&
+    !unsuitable &&
     rating >= 4 &&
-    reviews >= (type === "pub" ? 20 : 10)
+    reviews >= (["cafes", "food", "shopping"].includes(category) ? 20 : 10)
   );
 }
 
-function isUsableCandidate(place: Omit<Place, "stopType">) {
+function isUsableCandidate(place: Omit<Place, "category">) {
   return Boolean(
     place.place_id &&
       place.geometry?.location &&
@@ -102,19 +101,18 @@ function isUsableCandidate(place: Omit<Place, "stopType">) {
 }
 
 async function nearbyCandidates(
-  path: "/places" | "/attractions",
   point: Coordinate,
-  type: Place["stopType"],
+  category: StopCategory,
   radius?: number,
 ): Promise<Place[]> {
   const response = await post<{
-    data: { results?: Omit<Place, "stopType">[] } | Omit<Place, "stopType">[];
-  }>(path, { lat: point.latitude, lng: point.longitude, radius });
+    data: { results?: Omit<Place, "category">[] } | Omit<Place, "category">[];
+  }>("/discover", { lat: point.latitude, lng: point.longitude, category, radius });
   const results = Array.isArray(response.data)
     ? response.data
     : response.data?.results;
   const available = results ?? [];
-  const quality = available.filter((place) => isQualityCandidate(place, type));
+  const quality = available.filter((place) => isQualityCandidate(place, category));
   // Prefer established, well-reviewed places, but retain a fallback in quieter areas.
   return (
     quality.length
@@ -124,9 +122,9 @@ async function nearbyCandidates(
         )
   )
     .sort(
-      (a, b) => candidateScore(b, point, type) - candidateScore(a, point, type),
+      (a, b) => candidateScore(b, point, category) - candidateScore(a, point, category),
     )
-    .map((place) => ({ ...place, stopType: type }));
+    .map((place) => ({ ...place, category }));
 }
 
 const LOCAL_SEARCH_THRESHOLD_METRES = 1000;
@@ -198,32 +196,11 @@ function adaptiveSearchRadius(
   return Math.round(Math.min(3000, Math.max(400, overlappingRadius)));
 }
 
-function mixedStopTypes(
-  pubCount: number,
-  attractionCount: number,
-): Place["stopType"][] {
-  const total = pubCount + attractionCount;
-  let pubsUsed = 0;
-  let attractionsUsed = 0;
-  return Array.from({ length: total }, (_, index) => {
-    if (pubsUsed >= pubCount) {
-      attractionsUsed += 1;
-      return "attraction";
-    }
-    if (attractionsUsed >= attractionCount) {
-      pubsUsed += 1;
-      return "pub";
-    }
-    const pubDeficit = ((index + 1) * pubCount) / total - pubsUsed;
-    const attractionDeficit =
-      ((index + 1) * attractionCount) / total - attractionsUsed;
-    if (pubDeficit >= attractionDeficit) {
-      pubsUsed += 1;
-      return "pub";
-    }
-    attractionsUsed += 1;
-    return "attraction";
-  });
+function distributedCategories(categories: StopCategory[], stopCount: number) {
+  return Array.from(
+    { length: stopCount },
+    (_, index) => categories[index % categories.length],
+  );
 }
 
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
@@ -352,8 +329,8 @@ export async function routeThroughStops(
 export async function planRoute(
   startText: string,
   finishText: string,
-  pubCount: number,
-  attractionCount: number,
+  categories: StopCategory[],
+  stopCount: number,
   mode: TravelMode,
   onSearchCoverage?: (coverage: SearchCoverage) => void,
 ): Promise<RoutePlan> {
@@ -361,41 +338,36 @@ export async function planRoute(
     geocode(startText),
     geocode(finishText),
   ]);
-  const stopTypes = mixedStopTypes(pubCount, attractionCount);
+  const stopCategories = distributedCategories(categories, stopCount);
   const routeDistance = distanceInMetres(origin, destination);
   const points = plotPoints(
     origin,
     destination,
-    stopTypes.length,
+    stopCategories.length,
     routeDistance,
   );
   const searchRadius = adaptiveSearchRadius(
     origin,
     destination,
-    stopTypes.length,
+    stopCategories.length,
   );
   onSearchCoverage?.({
     path: [origin, destination],
     points: points.map((point, index) => ({
       ...point,
-      stopType: stopTypes[index],
+      category: stopCategories[index],
       radius: searchRadius,
     })),
   });
   const stops: Place[] = [];
   const selectedIds = new Set<string>();
   const candidateGroups = await Promise.all(
-    stopTypes.map((type, index) =>
-      nearbyCandidates(
-        type === "pub" ? "/places" : "/attractions",
-        points[index],
-        type,
-        searchRadius,
-      ),
+    stopCategories.map((category, index) =>
+      nearbyCandidates(points[index], category, searchRadius),
     ),
   );
   // Select in journey order after fetching in parallel, rejecting duplicates between areas.
-  for (let index = 0; index < stopTypes.length; index += 1) {
+  for (let index = 0; index < stopCategories.length; index += 1) {
     const place = candidateGroups[index].find(
       (candidate) => !selectedIds.has(candidate.place_id),
     );
@@ -406,26 +378,11 @@ export async function planRoute(
   }
   if (stops.length === 0)
     throw new Error(
-      "No pubs or attractions were found along this route. Try different locations or a longer route.",
+      "No suitable places were found along this route. Try different interests, locations or a longer route.",
     );
-  if (stops.length !== stopTypes.length) {
-    const missingPubs =
-      pubCount - stops.filter((stop) => stop.stopType === "pub").length;
-    const missingAttractions =
-      attractionCount -
-      stops.filter((stop) => stop.stopType === "attraction").length;
-    const missing = [
-      missingPubs > 0
-        ? `${missingPubs} ${missingPubs === 1 ? "pub" : "pubs"}`
-        : null,
-      missingAttractions > 0
-        ? `${missingAttractions} ${missingAttractions === 1 ? "attraction" : "attractions"}`
-        : null,
-    ]
-      .filter(Boolean)
-      .join(" and ");
+  if (stops.length !== stopCategories.length) {
     throw new Error(
-      `We couldn't find ${missing} of a suitable standard along this route. Try a longer route or nearby locations.`,
+      "We couldn't find enough suitable places along this route. Try fewer stops, different interests or nearby locations.",
     );
   }
   return routeThroughStops(origin, destination, stops, mode);
@@ -434,50 +391,48 @@ export async function planRoute(
 export async function planLocalTour(
   locationText: string,
   radius: number,
-  pubCount: number,
-  attractionCount: number,
+  categories: StopCategory[],
+  stopCount: number,
   mode: TravelMode,
   onSearchCoverage?: (coverage: SearchCoverage) => void,
 ): Promise<RoutePlan> {
   const centre = await geocode(locationText);
   const searchRadius = Math.round(Math.min(5000, Math.max(500, radius)));
-  const stopTypes = mixedStopTypes(pubCount, attractionCount);
+  const stopCategories = distributedCategories(categories, stopCount);
   onSearchCoverage?.({
     path: [centre, centre],
     points: [{
       ...centre,
-      stopType: "local",
+      category: "local",
       radius: searchRadius,
     }],
   });
 
-  const [pubCandidates, attractionCandidates] = await Promise.all([
-    pubCount > 0
-      ? nearbyCandidates("/places", centre, "pub", searchRadius)
-      : Promise.resolve([]),
-    attractionCount > 0
-      ? nearbyCandidates("/attractions", centre, "attraction", searchRadius)
-      : Promise.resolve([]),
-  ]);
-  let pubIndex = 0;
-  let attractionIndex = 0;
+  const categoryCandidates = new Map(
+    await Promise.all(
+      categories.map(async (category) => [
+        category,
+        await nearbyCandidates(centre, category, searchRadius),
+      ] as const),
+    ),
+  );
+  const categoryIndices = new Map<StopCategory, number>();
   const selectedIds = new Set<string>();
-  const stops = stopTypes
-    .map((type) => {
-      const candidates = type === "pub" ? pubCandidates : attractionCandidates;
-      let index = type === "pub" ? pubIndex : attractionIndex;
+  const stops = stopCategories
+    .map((category) => {
+      const candidates = categoryCandidates.get(category) ?? [];
+      let index = categoryIndices.get(category) ?? 0;
       while (index < candidates.length && selectedIds.has(candidates[index].place_id)) {
         index += 1;
       }
-      if (type === "pub") pubIndex = index + 1;
-      else attractionIndex = index + 1;
+      categoryIndices.set(category, index + 1);
       const place = candidates[index];
       if (place) selectedIds.add(place.place_id);
       return place;
     })
     .filter((place): place is Place => Boolean(place));
 
-  if (stops.length !== stopTypes.length) {
+  if (stops.length !== stopCategories.length) {
     throw new Error(
       "We couldn't find enough suitable stops within this area. Increase the search radius or reduce the number of stops.",
     );
@@ -506,28 +461,26 @@ export async function findReplacementStop(
     longitude: stop.geometry.location.lng,
   };
   const candidates = await nearbyCandidates(
-    stop.stopType === "pub" ? "/places" : "/attractions",
     point,
-    stop.stopType,
+    stop.category,
   );
   const excluded = new Set(excludedPlaceIds);
   const replacement = candidates.find(
     (candidate) => !excluded.has(candidate.place_id),
   );
   if (!replacement)
-    throw new Error(`No different ${stop.stopType} was found nearby.`);
+    throw new Error(`No different ${stop.category} place was found nearby.`);
   return replacement;
 }
 
 export async function findAdditionalStop(
-  stopType: Place["stopType"],
+  category: StopCategory,
   point: Coordinate,
   excludedPlaceIds: string[],
 ): Promise<Place> {
   const candidates = await nearbyCandidates(
-    stopType === "pub" ? "/places" : "/attractions",
     point,
-    stopType,
+    category,
   );
   const excluded = new Set(excludedPlaceIds);
   const place = candidates.find(
@@ -535,7 +488,7 @@ export async function findAdditionalStop(
   );
   if (!place)
     throw new Error(
-      `No suitable ${stopType} was found in that part of the route.`,
+      `No suitable ${category} place was found in that part of the route.`,
     );
   return place;
 }

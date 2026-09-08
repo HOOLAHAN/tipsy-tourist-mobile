@@ -1,0 +1,25 @@
+import type { StopCategory } from "./types";
+
+export const STOP_CATEGORIES: {
+  id: StopCategory;
+  label: string;
+  singular: string;
+  icon: string;
+  color: string;
+  background: string;
+}[] = [
+  { id: "landmarks", label: "Landmarks", singular: "Landmark", icon: "bank-outline", color: "#7c3aed", background: "#ede9fe" },
+  { id: "museums", label: "Museums", singular: "Museum", icon: "museum", color: "#9333ea", background: "#f3e8ff" },
+  { id: "galleries", label: "Galleries", singular: "Gallery", icon: "palette-outline", color: "#db2777", background: "#fce7f3" },
+  { id: "parks", label: "Parks", singular: "Park", icon: "tree-outline", color: "#15803d", background: "#dcfce7" },
+  { id: "cafes", label: "Cafés", singular: "Café", icon: "coffee-outline", color: "#a16207", background: "#fef3c7" },
+  { id: "food", label: "Food", singular: "Food", icon: "silverware-fork-knife", color: "#ea580c", background: "#ffedd5" },
+  { id: "shopping", label: "Shopping", singular: "Shopping", icon: "shopping-outline", color: "#0369a1", background: "#e0f2fe" },
+  { id: "markets", label: "Markets", singular: "Market", icon: "storefront-outline", color: "#0f766e", background: "#ccfbf1" },
+];
+
+export const DEFAULT_CATEGORIES: StopCategory[] = ["landmarks", "museums", "parks"];
+
+export function categoryDetails(category: StopCategory) {
+  return STOP_CATEGORIES.find((item) => item.id === category) ?? STOP_CATEGORIES[0];
+}
