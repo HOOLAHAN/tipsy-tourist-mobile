@@ -1,5 +1,6 @@
 import polyline from "@mapbox/polyline";
 import {
+  CategoryQuantities,
   Coordinate,
   Place,
   PlaceDetails,
@@ -196,11 +197,21 @@ function adaptiveSearchRadius(
   return Math.round(Math.min(3000, Math.max(400, overlappingRadius)));
 }
 
-function distributedCategories(categories: StopCategory[], stopCount: number) {
-  return Array.from(
-    { length: stopCount },
-    (_, index) => categories[index % categories.length],
-  );
+function distributedCategories(quantities: CategoryQuantities) {
+  const remaining = Object.entries(quantities).map(([category, quantity]) => ({
+    category: category as StopCategory,
+    quantity: Math.min(5, Math.max(0, Math.floor(quantity))),
+  }));
+  const categories: StopCategory[] = [];
+  while (categories.length < 10 && remaining.some(({ quantity }) => quantity > 0)) {
+    for (const item of remaining) {
+      if (item.quantity > 0 && categories.length < 10) {
+        categories.push(item.category);
+        item.quantity -= 1;
+      }
+    }
+  }
+  return categories;
 }
 
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
@@ -329,8 +340,7 @@ export async function routeThroughStops(
 export async function planRoute(
   startText: string,
   finishText: string,
-  categories: StopCategory[],
-  stopCount: number,
+  quantities: CategoryQuantities,
   mode: TravelMode,
   onSearchCoverage?: (coverage: SearchCoverage) => void,
 ): Promise<RoutePlan> {
@@ -338,7 +348,7 @@ export async function planRoute(
     geocode(startText),
     geocode(finishText),
   ]);
-  const stopCategories = distributedCategories(categories, stopCount);
+  const stopCategories = distributedCategories(quantities);
   const routeDistance = distanceInMetres(origin, destination);
   const points = plotPoints(
     origin,
@@ -391,14 +401,14 @@ export async function planRoute(
 export async function planLocalTour(
   locationText: string,
   radius: number,
-  categories: StopCategory[],
-  stopCount: number,
+  quantities: CategoryQuantities,
   mode: TravelMode,
   onSearchCoverage?: (coverage: SearchCoverage) => void,
 ): Promise<RoutePlan> {
   const centre = await geocode(locationText);
   const searchRadius = Math.round(Math.min(5000, Math.max(500, radius)));
-  const stopCategories = distributedCategories(categories, stopCount);
+  const stopCategories = distributedCategories(quantities);
+  const categories = [...new Set(stopCategories)];
   onSearchCoverage?.({
     path: [centre, centre],
     points: [{

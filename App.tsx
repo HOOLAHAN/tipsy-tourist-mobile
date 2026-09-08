@@ -49,6 +49,7 @@ import {
 } from "./src/api";
 import { ThemeName, themes } from "./src/theme";
 import {
+  CategoryQuantities,
   Place,
   PlaceDetails,
   PlaceSuggestion,
@@ -59,7 +60,7 @@ import {
 } from "./src/types";
 import {
   categoryDetails,
-  DEFAULT_CATEGORIES,
+  DEFAULT_CATEGORY_QUANTITIES,
   STOP_CATEGORIES,
 } from "./src/categories";
 
@@ -1160,10 +1161,16 @@ function AppContent() {
   const [finish, setFinish] = useState("");
   const [plannerMode, setPlannerMode] = useState<"journey" | "local">("journey");
   const [localRadius, setLocalRadius] = useState(1500);
-  const [selectedCategories, setSelectedCategories] = useState<StopCategory[]>(
-    DEFAULT_CATEGORIES,
+  const [categoryQuantities, setCategoryQuantities] = useState<CategoryQuantities>(
+    DEFAULT_CATEGORY_QUANTITIES,
   );
-  const [stopCount, setStopCount] = useState(4);
+  const selectedCategories = STOP_CATEGORIES
+    .filter(({ id }) => categoryQuantities[id] > 0)
+    .map(({ id }) => id);
+  const stopCount = Object.values(categoryQuantities).reduce(
+    (total, quantity) => total + quantity,
+    0,
+  );
   const mode = "walking" as const;
   const [route, setRoute] = useState<RoutePlan | null>(null);
   const [searchCoverage, setSearchCoverage] = useState<SearchCoverage | null>(null);
@@ -1390,17 +1397,35 @@ function AppContent() {
       );
   };
   const toggleCategory = (category: StopCategory) => {
-    setSelectedCategories((current) => {
-      if (current.includes(category)) {
-        if (current.length === 1) {
+    setCategoryQuantities((current) => {
+      const currentStopCount = Object.values(current).reduce(
+        (total, quantity) => total + quantity,
+        0,
+      );
+      if (current[category] > 0) {
+        if (currentStopCount === current[category]) {
           Alert.alert("Keep one interest", "Your itinerary needs at least one selected interest.");
           return current;
         }
-        return current.filter((item) => item !== category);
+        return { ...current, [category]: 0 };
       }
-      const next = [...current, category];
-      setStopCount((count) => Math.max(count, next.length));
-      return next;
+      if (currentStopCount >= 10) {
+        Alert.alert("Maximum 10 stops", "Reduce another interest before adding this one.");
+        return current;
+      }
+      return { ...current, [category]: 1 };
+    });
+  };
+  const setCategoryQuantity = (category: StopCategory, quantity: number) => {
+    setCategoryQuantities((current) => {
+      const otherStops = Object.entries(current).reduce(
+        (total, [id, count]) => total + (id === category ? 0 : count),
+        0,
+      );
+      return {
+        ...current,
+        [category]: Math.min(5, Math.max(1, Math.min(quantity, 10 - otherStops))),
+      };
     });
   };
   const submit = async () => {
@@ -1424,16 +1449,14 @@ function AppContent() {
         ? await planLocalTour(
             start,
             localRadius,
-            selectedCategories,
-            stopCount,
+            categoryQuantities,
             mode,
             setSearchCoverage,
           )
         : await planRoute(
             start,
             finish,
-            selectedCategories,
-            stopCount,
+            categoryQuantities,
             mode,
             setSearchCoverage,
           );
@@ -2197,25 +2220,33 @@ function AppContent() {
                 <Text style={[styles.sectionLabel, { color: colors.muted }]}>
                   WHAT ARE YOU INTO?
                 </Text>
-                <Text style={[styles.interestHelp, { color: colors.muted }]}>Choose one or more interests and we’ll mix them into your itinerary.</Text>
+                <Text style={[styles.interestHelp, { color: colors.muted }]}>Choose interests, then select up to 5 of each. Your itinerary can contain up to 10 stops.</Text>
                 <InterestSelector
                   selected={selectedCategories}
                   onToggle={toggleCategory}
                   colors={colors}
                 />
-                <Text style={[styles.sectionLabel, { color: colors.muted }]}>
-                  NUMBER OF STOPS
-                </Text>
-                <View style={styles.countersRow}>
-                  <StopCounter
-                    label="Stops"
-                    min={selectedCategories.length}
-                    max={8}
-                    value={stopCount}
-                    icon="map-marker-path"
-                    onChange={setStopCount}
-                    colors={colors}
-                  />
+                <View style={styles.stopCountHeading}>
+                  <Text style={[styles.sectionLabel, { color: colors.muted }]}>STOPS BY INTEREST</Text>
+                  <Text style={[styles.totalStopCount, { color: colors.primary }]}>{stopCount}/10</Text>
+                </View>
+                <View style={styles.categoryCounters}>
+                  {selectedCategories.map((category) => {
+                    const details = categoryDetails(category);
+                    const otherStops = stopCount - categoryQuantities[category];
+                    return (
+                      <StopCounter
+                        key={category}
+                        label={details.label}
+                        min={1}
+                        max={Math.min(5, 10 - otherStops)}
+                        value={categoryQuantities[category]}
+                        icon={details.icon as keyof typeof MaterialCommunityIcons.glyphMap}
+                        onChange={(quantity) => setCategoryQuantity(category, quantity)}
+                        colors={colors}
+                      />
+                    );
+                  })}
                 </View>
                 <Pressable
                   disabled={loading}
@@ -3078,9 +3109,19 @@ const styles = StyleSheet.create({
   },
   suggestionText: { flex: 1, fontSize: 14 },
   divider: { height: 1, marginVertical: 5 },
-  countersRow: { flexDirection: "row", gap: 7 },
+  stopCountHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  totalStopCount: { fontSize: 16, fontWeight: "800" },
+  categoryCounters: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+  },
   stopCounter: {
-    flex: 1,
+    width: "48.8%",
     borderWidth: 1,
     borderRadius: 20,
     padding: 9,

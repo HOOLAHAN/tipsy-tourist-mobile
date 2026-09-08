@@ -1,4 +1,4 @@
-import type { StopCategory } from "./types";
+import type { CategoryQuantities, StopCategory } from "./types";
 
 export const STOP_CATEGORIES: {
   id: StopCategory;
@@ -18,7 +18,16 @@ export const STOP_CATEGORIES: {
   { id: "markets", label: "Markets", singular: "Market", icon: "storefront-outline", color: "#0f766e", background: "#ccfbf1" },
 ];
 
-export const DEFAULT_CATEGORIES: StopCategory[] = ["landmarks", "museums", "parks"];
+export const DEFAULT_CATEGORY_QUANTITIES: CategoryQuantities = {
+  landmarks: 2,
+  museums: 1,
+  galleries: 0,
+  parks: 1,
+  cafes: 0,
+  food: 0,
+  shopping: 0,
+  markets: 0,
+};
 
 export function categoryDetails(category: StopCategory) {
   return STOP_CATEGORIES.find((item) => item.id === category) ?? STOP_CATEGORIES[0];

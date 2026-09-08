@@ -10,6 +10,8 @@ export type StopCategory =
   | "shopping"
   | "markets";
 
+export type CategoryQuantities = Record<StopCategory, number>;
+
 export type SearchCoveragePoint = Coordinate & {
   category: StopCategory | "local";
   radius: number;
