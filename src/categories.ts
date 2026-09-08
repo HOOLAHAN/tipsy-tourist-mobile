@@ -9,7 +9,7 @@ export const STOP_CATEGORIES: {
   background: string;
 }[] = [
   { id: "landmarks", label: "Landmarks", singular: "Landmark", icon: "bank-outline", color: "#7c3aed", background: "#ede9fe" },
-  { id: "museums", label: "Museums", singular: "Museum", icon: "museum", color: "#9333ea", background: "#f3e8ff" },
+  { id: "museums", label: "Museums", singular: "Museum", icon: "pillar", color: "#9333ea", background: "#f3e8ff" },
   { id: "galleries", label: "Galleries", singular: "Gallery", icon: "palette-outline", color: "#db2777", background: "#fce7f3" },
   { id: "parks", label: "Parks", singular: "Park", icon: "tree-outline", color: "#15803d", background: "#dcfce7" },
   { id: "cafes", label: "Cafés", singular: "Café", icon: "coffee-outline", color: "#a16207", background: "#fef3c7" },
