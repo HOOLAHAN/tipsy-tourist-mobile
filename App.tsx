@@ -1293,6 +1293,7 @@ function AppContent() {
   const [themeName, setThemeName] = useState<ThemeName>("light");
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [plannerStep, setPlannerStep] = useState(0);
+  const [plannerMaxStep, setPlannerMaxStep] = useState(0);
   const [infoOpen, setInfoOpen] = useState(false);
   const [infoSection, setInfoSection] = useState<string | null>("safety");
   const [itineraryOpen, setItineraryOpen] = useState(false);
@@ -1351,7 +1352,9 @@ function AppContent() {
     plannerClosingRef.current = false;
     plannerTranslateY.stopAnimation();
     plannerTranslateY.setValue(0);
-    setPlannerStep(route ? 3 : 0);
+    const initialStep = route ? 3 : 0;
+    setPlannerStep(initialStep);
+    setPlannerMaxStep(initialStep);
     setPlannerOpen(true);
   };
   const dismissPlanner = () => {
@@ -1641,7 +1644,11 @@ function AppContent() {
       );
     }
     Haptics.selectionAsync();
-    setPlannerStep((current) => Math.min(3, current + 1));
+    setPlannerStep((current) => {
+      const nextStep = Math.min(3, current + 1);
+      setPlannerMaxStep((completed) => Math.max(completed, nextStep));
+      return nextStep;
+    });
   };
   const clear = () => {
     setRoute(null);
@@ -1651,6 +1658,7 @@ function AppContent() {
     setFinish("");
     openPlanner();
     setPlannerStep(0);
+    setPlannerMaxStep(0);
   };
   const changeRouteLegMode = async (legMode: RouteLegMode) => {
     if (!route || selectedRouteLegIndex === null) return;
@@ -2322,7 +2330,7 @@ function AppContent() {
                         styles.plannerProgressSegment,
                         {
                           backgroundColor:
-                            index <= plannerStep ? colors.primary : colors.border,
+                            index <= plannerMaxStep ? colors.primary : colors.border,
                         },
                       ]}
                     />
@@ -2332,7 +2340,13 @@ function AppContent() {
                   {plannerSteps.map((step, index) => (
                     <Pressable
                       key={step}
-                      disabled={index >= plannerStep}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Go to ${step} step`}
+                      accessibilityState={{
+                        selected: index === plannerStep,
+                        disabled: index > plannerMaxStep,
+                      }}
+                      disabled={index > plannerMaxStep || index === plannerStep}
                       onPress={() => setPlannerStep(index)}
                       style={styles.plannerProgressLabelButton}
                     >
@@ -2340,7 +2354,7 @@ function AppContent() {
                         style={[
                           styles.plannerProgressLabel,
                           { color: index === plannerStep ? colors.primary : colors.muted },
-                          index <= plannerStep && styles.plannerProgressLabelActive,
+                          index <= plannerMaxStep && styles.plannerProgressLabelActive,
                         ]}
                       >
                         {step}
@@ -2562,7 +2576,10 @@ function AppContent() {
                 )}
                 {plannerStep === 3 && (
                   <View style={styles.plannerReviewList}>
-                    <View
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Edit route"
+                      onPress={() => setPlannerStep(0)}
                       style={[
                         styles.plannerReviewCard,
                         { backgroundColor: colors.surface, borderColor: colors.border },
@@ -2579,11 +2596,15 @@ function AppContent() {
                             : `${displayLocation(start)} → ${displayLocation(finish)}`}
                         </Text>
                       </View>
-                      <Pressable onPress={() => setPlannerStep(0)} style={styles.plannerReviewEdit}>
+                      <View style={styles.plannerReviewEdit}>
                         <Text style={[styles.plannerReviewEditText, { color: colors.primary }]}>Edit</Text>
-                      </Pressable>
-                    </View>
-                    <View
+                        <Ionicons name="chevron-forward" size={15} color={colors.primary} />
+                      </View>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Edit transport"
+                      onPress={() => setPlannerStep(1)}
                       style={[
                         styles.plannerReviewCard,
                         { backgroundColor: colors.surface, borderColor: colors.border },
@@ -2604,11 +2625,15 @@ function AppContent() {
                             : ""}
                         </Text>
                       </View>
-                      <Pressable onPress={() => setPlannerStep(1)} style={styles.plannerReviewEdit}>
+                      <View style={styles.plannerReviewEdit}>
                         <Text style={[styles.plannerReviewEditText, { color: colors.primary }]}>Edit</Text>
-                      </Pressable>
-                    </View>
-                    <View
+                        <Ionicons name="chevron-forward" size={15} color={colors.primary} />
+                      </View>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Edit stops"
+                      onPress={() => setPlannerStep(2)}
                       style={[
                         styles.plannerReviewCard,
                         { backgroundColor: colors.surface, borderColor: colors.border },
@@ -2623,10 +2648,11 @@ function AppContent() {
                           {selectedStopSummary || "No interests selected"}
                         </Text>
                       </View>
-                      <Pressable onPress={() => setPlannerStep(2)} style={styles.plannerReviewEdit}>
+                      <View style={styles.plannerReviewEdit}>
                         <Text style={[styles.plannerReviewEditText, { color: colors.primary }]}>Edit</Text>
-                      </Pressable>
-                    </View>
+                        <Ionicons name="chevron-forward" size={15} color={colors.primary} />
+                      </View>
+                    </Pressable>
                   </View>
                 )}
                 {route && plannerStep === 3 && (
@@ -3339,7 +3365,13 @@ const styles = StyleSheet.create({
   plannerReviewCopy: { flex: 1, gap: 2 },
   plannerReviewLabel: { fontSize: 9.5, fontWeight: "800", letterSpacing: 1 },
   plannerReviewValue: { fontSize: 13, lineHeight: 18, fontWeight: "600" },
-  plannerReviewEdit: { paddingHorizontal: 5, paddingVertical: 9 },
+  plannerReviewEdit: {
+    paddingLeft: 5,
+    paddingVertical: 9,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 1,
+  },
   plannerReviewEditText: { fontSize: 12, fontWeight: "800" },
   plannerModeSwitch: {
     flexDirection: "row",
