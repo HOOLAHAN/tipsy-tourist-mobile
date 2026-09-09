@@ -84,4 +84,23 @@ export type RouteLeg = {
   midpoint: Coordinate;
   mode: RouteLegMode;
   coordinates: Coordinate[];
+  steps: RouteStep[];
+};
+
+export type RouteStep = {
+  mode: RouteLegMode;
+  instruction: string;
+  distance: string;
+  duration: string;
+  coordinates: Coordinate[];
+  lineName?: string;
+  lineShortName?: string;
+  vehicleName?: string;
+  vehicleType?: string;
+  departureStop?: string;
+  arrivalStop?: string;
+  departureTime?: string;
+  arrivalTime?: string;
+  headsign?: string;
+  stopCount?: number;
 };

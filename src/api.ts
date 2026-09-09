@@ -184,6 +184,28 @@ function distanceInMetres(start: Coordinate, end: Coordinate) {
   return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function plainText(value = "") {
+  return value
+    .replace(/<div[^>]*>/gi, " · ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function metricDistance(metres: number) {
+  return metres >= 1000 ? `${(metres / 1000).toFixed(1)} km` : `${metres} m`;
+}
+
+function minuteDuration(seconds: number) {
+  return `${Math.max(1, Math.round(seconds / 60))} min`;
+}
+
 function adaptiveSearchRadius(
   start: Coordinate,
   end: Coordinate,
@@ -288,7 +310,26 @@ export async function routeThroughStops(
     duration: { value: number };
     start_location: { lat: number; lng: number };
     end_location: { lat: number; lng: number };
-    steps?: { polyline?: { points?: string } }[];
+    steps?: {
+      travel_mode?: string;
+      html_instructions?: string;
+      distance?: { value: number };
+      duration?: { value: number };
+      polyline?: { points?: string };
+      transit_details?: {
+        departure_stop?: { name?: string };
+        arrival_stop?: { name?: string };
+        departure_time?: { text?: string };
+        arrival_time?: { text?: string };
+        headsign?: string;
+        num_stops?: number;
+        line?: {
+          name?: string;
+          short_name?: string;
+          vehicle?: { name?: string; type?: string };
+        };
+      };
+    }[];
   });
   const metres = rawLegs.reduce((sum, leg) => sum + leg.distance.value, 0);
   const seconds = rawLegs.reduce((sum, leg) => sum + leg.duration.value, 0);
@@ -331,14 +372,36 @@ export async function routeThroughStops(
       covered += segmentDistance;
     }
     return {
-      distance:
-        leg.distance.value >= 1000
-          ? `${(leg.distance.value / 1000).toFixed(1)} km`
-          : `${leg.distance.value} m`,
-      duration: `${Math.max(1, Math.round(leg.duration.value / 60))} min`,
+      distance: metricDistance(leg.distance.value),
+      duration: minuteDuration(leg.duration.value),
       midpoint,
       mode: responses[legIndex].mode,
       coordinates,
+      steps: (leg.steps ?? []).map((step) => {
+        const transit = step.transit_details;
+        const stepMode = (step.travel_mode ?? responses[legIndex].mode).toLowerCase();
+        return {
+          mode: (["walking", "transit", "driving"].includes(stepMode)
+            ? stepMode
+            : responses[legIndex].mode) as RouteLegMode,
+          instruction: plainText(step.html_instructions),
+          distance: metricDistance(step.distance?.value ?? 0),
+          duration: minuteDuration(step.duration?.value ?? 0),
+          coordinates: step.polyline?.points
+            ? polyline.decode(step.polyline.points).map(([latitude, longitude]) => ({ latitude, longitude }))
+            : [],
+          lineName: transit?.line?.name,
+          lineShortName: transit?.line?.short_name,
+          vehicleName: transit?.line?.vehicle?.name,
+          vehicleType: transit?.line?.vehicle?.type,
+          departureStop: transit?.departure_stop?.name,
+          arrivalStop: transit?.arrival_stop?.name,
+          departureTime: transit?.departure_time?.text,
+          arrivalTime: transit?.arrival_time?.text,
+          headsign: transit?.headsign,
+          stopCount: transit?.num_stops,
+        };
+      }),
     };
   });
   return {

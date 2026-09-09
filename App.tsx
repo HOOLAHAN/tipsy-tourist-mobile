@@ -253,6 +253,77 @@ function TransportSelector({
   );
 }
 
+function RouteLegDetailsSheet({
+  leg,
+  index,
+  onClose,
+  colors,
+}: {
+  leg: RouteLeg | null;
+  index: number;
+  onClose: () => void;
+  colors: (typeof themes)[ThemeName];
+}) {
+  if (!leg) return null;
+  const transport = transportDetails(leg.mode);
+  const color = legColor(leg.mode, colors.primary);
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.legDetailsOverlay}>
+        <Pressable style={styles.legDetailsDismiss} onPress={onClose} />
+        <SafeAreaView edges={["left", "right", "bottom"]} style={[styles.legDetailsSheet, { backgroundColor: colors.card }]}>
+          <View style={styles.legDetailsHandle} />
+          <View style={styles.legDetailsHeader}>
+            <View style={[styles.legDetailsIcon, { backgroundColor: color }]}>
+              <MaterialCommunityIcons name={transport.icon} size={24} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.legDetailsEyebrow, { color }]}>LEG {index + 1}</Text>
+              <Text style={[styles.legDetailsTitle, { color: colors.text }]}>{transport.label}</Text>
+              <Text style={[styles.legDetailsSummary, { color: colors.muted }]}>{leg.duration} · {leg.distance}</Text>
+            </View>
+            <Pressable accessibilityLabel="Close route details" onPress={onClose} style={[styles.legDetailsClose, { backgroundColor: colors.surface }]}>
+              <Ionicons name="close" size={23} color={colors.text} />
+            </Pressable>
+          </View>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.legStepList}>
+            {leg.steps.map((step, stepIndex) => {
+              const stepTransport = transportDetails(step.mode);
+              const stepColor = legColor(step.mode, colors.primary);
+              const service = step.lineShortName || step.lineName;
+              return (
+                <View key={`${stepIndex}-${step.instruction}`} style={[styles.legStep, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+                  <View style={[styles.legStepIcon, { backgroundColor: `${stepColor}18` }]}>
+                    <MaterialCommunityIcons name={stepTransport.icon} size={19} color={stepColor} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.legStepTitle, { color: colors.text }]}>
+                      {service ? `${step.vehicleName || "Transit"} ${service}` : step.instruction || stepTransport.label}
+                    </Text>
+                    {step.departureStop && (
+                      <Text style={[styles.legStepInstruction, { color: colors.text }]}>Get on at {step.departureStop}{step.departureTime ? ` · ${step.departureTime}` : ""}</Text>
+                    )}
+                    {step.headsign && <Text style={[styles.legStepMeta, { color: colors.muted }]}>Towards {step.headsign}</Text>}
+                    {step.arrivalStop && (
+                      <Text style={[styles.legStepInstruction, { color: colors.text }]}>Get off at {step.arrivalStop}{step.arrivalTime ? ` · ${step.arrivalTime}` : ""}</Text>
+                    )}
+                    {!step.departureStop && step.instruction ? (
+                      <Text style={[styles.legStepInstruction, { color: colors.text }]}>{step.instruction}</Text>
+                    ) : null}
+                    <Text style={[styles.legStepMeta, { color: colors.muted }]}>
+                      {step.duration} · {step.distance}{step.stopCount ? ` · ${step.stopCount} stops` : ""}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+          </ScrollView>
+        </SafeAreaView>
+      </View>
+    </Modal>
+  );
+}
+
 function shareMapRegion(route: RoutePlan): Region {
   const points = [route.origin, ...route.coordinates, route.destination];
   const latitudes = points.map((point) => point.latitude);
@@ -835,6 +906,7 @@ function ItineraryRow({
   onDragChange,
   onRemove,
   onRegenerate,
+  onOpenLeg,
   updating,
   leg,
 }: {
@@ -848,6 +920,7 @@ function ItineraryRow({
   onDragChange: (dragging: boolean) => void;
   onRemove: () => void;
   onRegenerate: () => void;
+  onOpenLeg: () => void;
   updating?: boolean;
   leg?: RouteLeg;
 }) {
@@ -984,7 +1057,7 @@ function ItineraryRow({
               : (place.vicinity ?? "Tap for place details")}
           </Text>
           {leg && !dragging && (
-            <View style={styles.itineraryLeg}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Open journey details" onPress={onOpenLeg} style={styles.itineraryLeg}>
               <MaterialCommunityIcons
                 name={transportDetails(leg.mode).icon}
                 size={14}
@@ -993,7 +1066,7 @@ function ItineraryRow({
               <Text style={[styles.itineraryLegText, { color: legColor(leg.mode, colors.primary) }]}>
                 {index === 0 ? "From start" : "From previous stop"} · {transportDetails(leg.mode).label} · {leg.duration} · {leg.distance}
               </Text>
-            </View>
+            </Pressable>
           )}
         </View>
         <View style={styles.rowActions}>
@@ -1188,6 +1261,7 @@ function AppContent() {
   );
   const [mode, setMode] = useState<TravelMode>("walking");
   const [route, setRoute] = useState<RoutePlan | null>(null);
+  const [selectedRouteLegIndex, setSelectedRouteLegIndex] = useState<number | null>(null);
   const [searchCoverage, setSearchCoverage] = useState<SearchCoverage | null>(null);
   const [showSearchCoverage, setShowSearchCoverage] = useState(true);
   const [showRouteLegs, setShowRouteLegs] = useState(true);
@@ -1474,6 +1548,7 @@ function AppContent() {
   };
   const clear = () => {
     setRoute(null);
+    setSelectedRouteLegIndex(null);
     setSearchCoverage(null);
     setStart("");
     setFinish("");
@@ -1746,15 +1821,20 @@ function AppContent() {
         >
           {route && (
             <>
-              {route.legs.map((leg, index) => (
-                <Polyline
-                  key={`planned-route-${index}`}
-                  coordinates={leg.coordinates}
-                  strokeColor={legColor(leg.mode, colors.primary)}
-                  strokeWidth={6}
-                  zIndex={5}
-                />
-              ))}
+              {route.legs.flatMap((leg, legIndex) => {
+                const drawableSteps = leg.steps.filter((step) => step.coordinates.length > 1);
+                return (drawableSteps.length ? drawableSteps : [{ ...leg, instruction: "" }]).map((step, stepIndex) => (
+                  <Polyline
+                    key={`planned-route-${legIndex}-${stepIndex}`}
+                    coordinates={step.coordinates}
+                    strokeColor={legColor(step.mode, colors.primary)}
+                    strokeWidth={selectedRouteLegIndex === legIndex ? 9 : 6}
+                    zIndex={5}
+                    tappable
+                    onPress={() => setSelectedRouteLegIndex(legIndex)}
+                  />
+                ));
+              })}
               {!capturingShareMap && (
                 <>
                   <Marker
@@ -1856,6 +1936,7 @@ function AppContent() {
               coordinate={leg.midpoint}
               anchor={{ x: 0.5, y: index % 2 === 0 ? 1 : 0 }}
               zIndex={6}
+              onPress={() => setSelectedRouteLegIndex(index)}
             >
               <View
                 pointerEvents="none"
@@ -2666,11 +2747,15 @@ function AppContent() {
                           updating={updatingStopId === place.place_id}
                           onRegenerate={() => regenerateStop(place)}
                           onRemove={() => removeStop(place)}
+                          onOpenLeg={() => setSelectedRouteLegIndex(index)}
                           leg={route.legs[index]}
                         />
                       ))}
                       {route && route.legs.length > route.stops.length && (
-                        <View
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Open final journey details"
+                          onPress={() => setSelectedRouteLegIndex(route.stops.length)}
                           style={[
                             styles.finalLeg,
                             { backgroundColor: colors.surface, borderColor: colors.border },
@@ -2684,7 +2769,7 @@ function AppContent() {
                           <Text style={[styles.finalLegText, { color: colors.text }]}>
                             Final stop to finish · {transportDetails(route.legs[route.stops.length].mode).label} · {route.legs[route.stops.length].duration} · {route.legs[route.stops.length].distance}
                           </Text>
-                        </View>
+                        </Pressable>
                       )}
                     </ScrollView>
                   </View>
@@ -2693,6 +2778,12 @@ function AppContent() {
             </SafeAreaView>
           </View>
         </Modal>
+        <RouteLegDetailsSheet
+          leg={selectedRouteLegIndex === null ? null : route?.legs[selectedRouteLegIndex] ?? null}
+          index={selectedRouteLegIndex ?? 0}
+          onClose={() => setSelectedRouteLegIndex(null)}
+          colors={colors}
+        />
         {route && shareMapUri && (
           <View pointerEvents="none" style={styles.shareCaptureStage}>
             <ShareCard
@@ -2719,6 +2810,63 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  legDetailsOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(15,23,42,0.28)",
+  },
+  legDetailsDismiss: { flex: 1 },
+  legDetailsSheet: {
+    maxHeight: "72%",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 16,
+    paddingTop: 9,
+  },
+  legDetailsHandle: {
+    width: 48,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "#cbd5e1",
+    alignSelf: "center",
+    marginBottom: 14,
+  },
+  legDetailsHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
+  legDetailsIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  legDetailsEyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 1.4 },
+  legDetailsTitle: { fontSize: 21, fontWeight: "800" },
+  legDetailsSummary: { fontSize: 13, marginTop: 1 },
+  legDetailsClose: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  legStepList: { gap: 8, paddingTop: 16, paddingBottom: 20 },
+  legStep: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 12,
+    flexDirection: "row",
+    gap: 10,
+  },
+  legStepIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  legStepTitle: { fontSize: 15, fontWeight: "800", lineHeight: 20 },
+  legStepInstruction: { fontSize: 13, lineHeight: 18, marginTop: 4 },
+  legStepMeta: { fontSize: 12, lineHeight: 17, marginTop: 3 },
   headerWrap: { paddingHorizontal: 12, paddingTop: 8 },
   headerPill: { borderRadius: 999, paddingLeft: 9, paddingRight: 10 },
   filterButton: { borderRadius: 999 },
