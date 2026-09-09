@@ -1208,6 +1208,58 @@ function ItineraryRow({
   );
 }
 
+function TransportLegRow({
+  leg,
+  index,
+  from,
+  to,
+  colors,
+  onOpen,
+}: {
+  leg: RouteLeg;
+  index: number;
+  from: string;
+  to: string;
+  colors: (typeof themes)[ThemeName];
+  onOpen: () => void;
+}) {
+  const transport = transportDetails(leg.mode);
+  const color = legColor(leg.mode, colors.primary);
+  const service = leg.steps.find((step) => step.lineShortName || step.lineName);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Open leg ${index + 1}, ${transport.label}, from ${from} to ${to}`}
+      onPress={onOpen}
+      style={({ pressed }) => [
+        styles.transportLegCard,
+        { backgroundColor: colors.surface, borderColor: pressed ? color : colors.border },
+        pressed && styles.transportLegCardPressed,
+      ]}
+    >
+      <View style={[styles.transportLegIcon, { backgroundColor: color }]}>
+        <MaterialCommunityIcons name={transport.icon} size={21} color="#fff" />
+      </View>
+      <View style={styles.transportLegCopy}>
+        <View style={styles.transportLegMeta}>
+          <Text style={[styles.transportLegEyebrow, { color }]}>LEG {index + 1}</Text>
+          <View style={[styles.transportLegBadge, { backgroundColor: color }]}>
+            <Text style={styles.transportLegBadgeText}>{transport.label}</Text>
+          </View>
+        </View>
+        <Text numberOfLines={2} style={[styles.transportLegTitle, { color: colors.text }]}>{from} → {to}</Text>
+        <Text style={[styles.transportLegSummary, { color: colors.muted }]}>{leg.duration} · {leg.distance}</Text>
+        {service && (
+          <Text numberOfLines={1} style={[styles.transportLegService, { color }]}>
+            {localiseTransitText(service.vehicleName) || "Public transport"}{service.lineShortName || service.lineName ? ` · ${service.lineShortName || service.lineName}` : ""}
+          </Text>
+        )}
+      </View>
+      <Ionicons name="chevron-forward" size={21} color={colors.primary} />
+    </Pressable>
+  );
+}
+
 const ShareCard = forwardRef<
   View,
   {
@@ -1358,6 +1410,8 @@ function AppContent() {
   const [infoOpen, setInfoOpen] = useState(false);
   const [infoSection, setInfoSection] = useState<string | null>("safety");
   const [itineraryOpen, setItineraryOpen] = useState(false);
+  const [itineraryView, setItineraryView] = useState<"stops" | "transport">("stops");
+  const [routeFailure, setRouteFailure] = useState<string | null>(null);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [detailsFromItinerary, setDetailsFromItinerary] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
@@ -1677,10 +1731,7 @@ function AppContent() {
         }),
       );
     } catch (error) {
-      Alert.alert(
-        "Could not plan route",
-        error instanceof Error ? error.message : "Please try again.",
-      );
+      setRouteFailure(error instanceof Error ? error.message : "Please try again.");
     } finally {
       setLoading(false);
     }
@@ -3193,6 +3244,26 @@ function AppContent() {
                         color="#fff"
                       />
                     </View>
+                    <View style={[styles.itineraryViewSwitch, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                      {([
+                        ["stops", "map-marker", "Stops"],
+                        ["transport", "transit-connection-variant", "Transport"],
+                      ] as const).map(([view, icon, label]) => {
+                        const selected = itineraryView === view;
+                        return (
+                          <Pressable
+                            key={view}
+                            accessibilityRole="tab"
+                            accessibilityState={{ selected }}
+                            onPress={() => setItineraryView(view)}
+                            style={[styles.itineraryViewButton, selected && { backgroundColor: colors.primary }]}
+                          >
+                            <MaterialCommunityIcons name={icon} size={17} color={selected ? "#fff" : colors.muted} />
+                            <Text style={[styles.itineraryViewButtonText, { color: selected ? "#fff" : colors.text }]}>{label}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
                     <ScrollView
                       style={styles.timelineScroll}
                       scrollEnabled={!isReordering}
@@ -3200,7 +3271,7 @@ function AppContent() {
                       showsVerticalScrollIndicator={false}
                       contentContainerStyle={styles.timeline}
                     >
-                      {route?.stops.map((place, index) => (
+                      {itineraryView === "stops" && route?.stops.map((place, index) => (
                         <ItineraryRow
                           key={place.place_id}
                           place={place}
@@ -3218,7 +3289,7 @@ function AppContent() {
                           leg={route.legs[index]}
                         />
                       ))}
-                      {route && route.legs.length > route.stops.length && (
+                      {itineraryView === "stops" && route && route.legs.length > route.stops.length && (
                         <Pressable
                           accessibilityRole="button"
                           accessibilityLabel="Open final journey details"
@@ -3238,10 +3309,63 @@ function AppContent() {
                           </Text>
                         </Pressable>
                       )}
+                      {itineraryView === "transport" && route?.legs.map((leg, index) => {
+                        const from = index === 0
+                          ? displayLocation(start) || "Start"
+                          : route.stops[index - 1]?.name || `Stop ${index}`;
+                        const to = index < route.stops.length
+                          ? route.stops[index]?.name || `Stop ${index + 1}`
+                          : displayLocation(plannerMode === "local" ? start : finish) || "Finish";
+                        return (
+                          <TransportLegRow
+                            key={`${index}-${leg.mode}`}
+                            leg={leg}
+                            index={index}
+                            from={from}
+                            to={to}
+                            colors={colors}
+                            onOpen={() => setSelectedRouteLegIndex(index)}
+                          />
+                        );
+                      })}
                     </ScrollView>
                   </View>
                 )}
               </Animated.View>
+            </SafeAreaView>
+          </View>
+        </Modal>
+        <Modal
+          visible={routeFailure !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setRouteFailure(null)}
+        >
+          <View style={styles.routeFailureOverlay}>
+            <SafeAreaView edges={["left", "right"]} style={styles.routeFailureSafe}>
+              <View style={[styles.routeFailureCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={[styles.routeFailureBrand, { backgroundColor: `${colors.primary}14` }]}>
+                  <Image source={require("./assets/trippa-logo.png")} resizeMode="contain" style={styles.routeFailureLogo} />
+                </View>
+                <Text style={[styles.routeFailureTitle, { color: colors.text }]}>Trippa couldn't build that itinerary</Text>
+                <Text style={[styles.routeFailureText, { color: colors.muted }]}>
+                  {routeFailure?.toLowerCase().includes("viable")
+                    ? "Those choices don't currently make a practical route."
+                    : routeFailure}
+                </Text>
+                <View style={[styles.routeFailureHint, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <Ionicons name="sparkles-outline" size={20} color={colors.primary} />
+                  <Text style={[styles.routeFailureHintText, { color: colors.text }]}>Try fewer stops, a wider search area, or another transport mode.</Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setRouteFailure(null)}
+                  style={({ pressed }) => [styles.routeFailureButton, { backgroundColor: colors.primary }, pressed && { opacity: 0.82 }]}
+                >
+                  <Text style={styles.routeFailureButtonText}>Adjust my plan</Text>
+                  <Ionicons name="arrow-forward" size={20} color="#fff" />
+                </Pressable>
+              </View>
             </SafeAreaView>
           </View>
         </Modal>
@@ -3604,6 +3728,25 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   itineraryPanel: { height: "100%", maxHeight: "100%" },
+  itineraryViewSwitch: {
+    flexDirection: "row",
+    marginHorizontal: 18,
+    marginTop: 4,
+    marginBottom: 2,
+    padding: 4,
+    borderWidth: 1,
+    borderRadius: 15,
+  },
+  itineraryViewButton: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 11,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+  itineraryViewButtonText: { fontSize: 13, fontWeight: "800" },
   modalDragZone: { height: 46, alignItems: "center", justifyContent: "center" },
   drawerPage: { flex: 1, minHeight: 0, overflow: "hidden" },
   drawerTitleRow: { flexDirection: "row", alignItems: "center", gap: 12 },
@@ -3678,6 +3821,26 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   finalLegText: { flex: 1, fontSize: 12, fontWeight: "700" },
+  transportLegCard: {
+    minHeight: 94,
+    borderWidth: 1,
+    borderRadius: 17,
+    padding: 13,
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+  },
+  transportLegCardPressed: { transform: [{ scale: 0.99 }] },
+  transportLegIcon: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  transportLegCopy: { flex: 1, minWidth: 0 },
+  transportLegMeta: { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 3 },
+  transportLegEyebrow: { fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
+  transportLegBadge: { borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2 },
+  transportLegBadgeText: { color: "#fff", fontSize: 9, fontWeight: "900" },
+  transportLegTitle: { fontSize: 15, fontWeight: "800", lineHeight: 19 },
+  transportLegSummary: { fontSize: 12, marginTop: 3 },
+  transportLegService: { fontSize: 11, fontWeight: "700", marginTop: 3 },
   rowActions: { gap: 5 },
   rowAction: {
     width: 30,
@@ -4174,6 +4337,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   itineraryHeaderActions: { flexDirection: "row", gap: 8 },
+  routeFailureOverlay: { flex: 1, backgroundColor: "rgba(3,8,20,0.68)", padding: 20, justifyContent: "center" },
+  routeFailureSafe: { width: "100%", alignItems: "center" },
+  routeFailureCard: { width: "100%", maxWidth: 430, borderWidth: 1, borderRadius: 28, padding: 22, alignItems: "center" },
+  routeFailureBrand: { width: 76, height: 76, borderRadius: 24, alignItems: "center", justifyContent: "center", marginBottom: 14 },
+  routeFailureLogo: { width: 62, height: 62 },
+  routeFailureTitle: { textAlign: "center", fontSize: 22, fontWeight: "900", letterSpacing: -0.4 },
+  routeFailureText: { textAlign: "center", fontSize: 15, lineHeight: 21, marginTop: 8 },
+  routeFailureHint: { width: "100%", borderWidth: 1, borderRadius: 16, padding: 13, marginTop: 18, flexDirection: "row", alignItems: "center", gap: 10 },
+  routeFailureHintText: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: "600" },
+  routeFailureButton: { width: "100%", minHeight: 52, borderRadius: 999, marginTop: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9 },
+  routeFailureButtonText: { color: "#fff", fontSize: 16, fontWeight: "800" },
   shareCaptureStage: {
     position: "absolute",
     left: -2000,
