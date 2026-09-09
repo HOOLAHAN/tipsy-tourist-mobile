@@ -342,7 +342,9 @@ function RouteLegDetailsSheet({
     <Modal visible transparent animationType="none" onRequestClose={dismiss}>
       <View style={styles.legDetailsOverlay}>
         <Pressable style={styles.legDetailsDismiss} onPress={dismiss} />
-        <Animated.View style={{ transform: [{ translateY }] }}>
+        <Animated.View
+          style={[styles.legDetailsAnimatedSheet, { transform: [{ translateY }] }]}
+        >
         <SafeAreaView edges={["left", "right", "bottom"]} style={[styles.legDetailsSheet, { backgroundColor: colors.card }]}>
           <View style={styles.legDetailsDragZone} {...panResponder.panHandlers}>
             <View style={styles.legDetailsHandle} />
@@ -544,6 +546,7 @@ function AutocompleteInput({
             setFocused(true);
           }}
           onFocus={() => setFocused(true)}
+          onBlur={() => setTimeout(() => setFocused(false), 120)}
           placeholder={placeholder}
           placeholderTextColor={colors.muted}
           style={[
@@ -3489,8 +3492,9 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(15,23,42,0.28)",
   },
   legDetailsDismiss: { flex: 1 },
+  legDetailsAnimatedSheet: { width: "100%", maxHeight: "72%", flexShrink: 1 },
   legDetailsSheet: {
-    maxHeight: "72%",
+    maxHeight: "100%",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 16,
@@ -4063,10 +4067,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   suggestions: {
-    position: "absolute",
-    top: 52,
-    left: 0,
-    right: 56,
+    marginTop: 6,
+    marginRight: 56,
     zIndex: 50,
     borderWidth: 1,
     borderRadius: 14,
