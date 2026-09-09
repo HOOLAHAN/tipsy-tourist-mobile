@@ -1747,7 +1747,11 @@ function AppContent() {
         }),
       );
     } catch (error) {
-      setRouteFailure(error instanceof Error ? error.message : "Please try again.");
+      const message = error instanceof Error ? error.message : "Please try again.";
+      // iOS will not reliably present one native Modal over another. Dismiss the
+      // planner first, then show the branded failure card.
+      setPlannerOpen(false);
+      setTimeout(() => setRouteFailure(message), 160);
     } finally {
       setLoading(false);
     }
@@ -1777,6 +1781,14 @@ function AppContent() {
       setPlannerMaxStep((completed) => Math.max(completed, nextStep));
       return nextStep;
     });
+  };
+  const returnToPlannerAfterFailure = () => {
+    setRouteFailure(null);
+    setTimeout(() => {
+      plannerClosingRef.current = false;
+      plannerTranslateY.setValue(0);
+      setPlannerOpen(true);
+    }, 120);
   };
   const clear = () => {
     setRoute(null);
@@ -2824,8 +2836,8 @@ function AppContent() {
                     borderTopColor: colors.border,
                     paddingBottom:
                       Platform.OS === "android"
-                        ? 10 + Math.max(safeAreaInsets.bottom, 28)
-                        : 14,
+                        ? 20 + Math.max(safeAreaInsets.bottom, 28)
+                        : 24 + safeAreaInsets.bottom,
                   },
                 ]}
               >
@@ -3391,7 +3403,7 @@ function AppContent() {
           visible={routeFailure !== null}
           transparent
           animationType="fade"
-          onRequestClose={() => setRouteFailure(null)}
+          onRequestClose={returnToPlannerAfterFailure}
         >
           <View style={styles.routeFailureOverlay}>
             <SafeAreaView edges={["left", "right"]} style={styles.routeFailureSafe}>
@@ -3411,7 +3423,7 @@ function AppContent() {
                 </View>
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => setRouteFailure(null)}
+                  onPress={returnToPlannerAfterFailure}
                   style={({ pressed }) => [styles.routeFailureButton, { backgroundColor: colors.primary }, pressed && { opacity: 0.82 }]}
                 >
                   <Text style={styles.routeFailureButtonText}>Adjust my plan</Text>
