@@ -32,7 +32,7 @@ export default {
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         NSLocationWhenInUseUsageDescription:
-          "Tipsy Tourist uses your location to start and centre walking itineraries, for example a local landmarks tour.",
+          "Tipsy Tourist uses your location to start and centre local itineraries, for example a landmarks tour.",
       },
     },
     android: {
@@ -57,7 +57,7 @@ export default {
         "expo-location",
         {
           locationWhenInUsePermission:
-            "Tipsy Tourist uses your location to start and centre walking itineraries, for example a local landmarks tour.",
+            "Tipsy Tourist uses your location to start and centre local itineraries, for example a landmarks tour.",
         },
       ],
     ],

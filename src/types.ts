@@ -22,7 +22,8 @@ export type SearchCoverage = {
   points: SearchCoveragePoint[];
 };
 
-export type TravelMode = "walking";
+export type TravelMode = "walking" | "transit" | "driving" | "smart";
+export type RouteLegMode = Exclude<TravelMode, "smart">;
 
 export type Place = {
   place_id: string;
@@ -81,4 +82,6 @@ export type RouteLeg = {
   distance: string;
   duration: string;
   midpoint: Coordinate;
+  mode: RouteLegMode;
+  coordinates: Coordinate[];
 };

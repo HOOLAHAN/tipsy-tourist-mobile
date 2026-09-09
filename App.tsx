@@ -57,6 +57,7 @@ import {
   RouteLeg,
   SearchCoverage,
   StopCategory,
+  TravelMode,
 } from "./src/types";
 import {
   categoryDetails,
@@ -195,6 +196,59 @@ function CategoryBadge({ category }: { category: StopCategory }) {
       <Text style={{ color: details.color, fontWeight: "700" }}>
         {details.singular.toUpperCase()}
       </Text>
+    </View>
+  );
+}
+
+const TRANSPORT_OPTIONS: {
+  id: TravelMode;
+  label: string;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+}[] = [
+  { id: "walking", label: "Walk", icon: "walk" },
+  { id: "transit", label: "Public transport", icon: "train-bus" },
+  { id: "driving", label: "Taxi", icon: "taxi" },
+  { id: "smart", label: "Smart mix", icon: "transit-connection-variant" },
+];
+
+function transportDetails(mode: TravelMode) {
+  return TRANSPORT_OPTIONS.find((option) => option.id === mode) ?? TRANSPORT_OPTIONS[0];
+}
+
+function legColor(mode: RouteLeg["mode"], fallback: string) {
+  if (mode === "transit") return "#7c3aed";
+  if (mode === "driving") return "#ea580c";
+  return fallback;
+}
+
+function TransportSelector({
+  value,
+  onChange,
+  colors,
+}: {
+  value: TravelMode;
+  onChange: (mode: TravelMode) => void;
+  colors: (typeof themes)[ThemeName];
+}) {
+  return (
+    <View style={[styles.transportSelector, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      {TRANSPORT_OPTIONS.map((option) => {
+        const selected = option.id === value;
+        return (
+          <Pressable
+            key={option.id}
+            accessibilityRole="radio"
+            accessibilityState={{ selected }}
+            onPress={() => onChange(option.id)}
+            style={[styles.transportOption, selected && { backgroundColor: colors.primary }]}
+          >
+            <MaterialCommunityIcons name={option.icon} size={18} color={selected ? "#fff" : colors.muted} />
+            <Text style={[styles.transportOptionText, { color: selected ? "#fff" : colors.text }]} numberOfLines={1}>
+              {option.label}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -932,12 +986,12 @@ function ItineraryRow({
           {leg && !dragging && (
             <View style={styles.itineraryLeg}>
               <MaterialCommunityIcons
-                name="walk"
+                name={transportDetails(leg.mode).icon}
                 size={14}
-                color={colors.primary}
+                color={legColor(leg.mode, colors.primary)}
               />
-              <Text style={[styles.itineraryLegText, { color: colors.primary }]}>
-                {index === 0 ? "From start" : "From previous stop"} · {leg.duration} · {leg.distance}
+              <Text style={[styles.itineraryLegText, { color: legColor(leg.mode, colors.primary) }]}>
+                {index === 0 ? "From start" : "From previous stop"} · {transportDetails(leg.mode).label} · {leg.duration} · {leg.distance}
               </Text>
             </View>
           )}
@@ -1012,7 +1066,7 @@ const ShareCard = forwardRef<
         <View style={{ flex: 1 }}>
           <RainbowTitle />
           <Text style={styles.shareStrapline}>
-            Your personalised walking itinerary
+            Your personalised local itinerary
           </Text>
         </View>
       </View>
@@ -1132,11 +1186,11 @@ function AppContent() {
     (total, quantity) => total + quantity,
     0,
   );
-  const mode = "walking" as const;
+  const [mode, setMode] = useState<TravelMode>("walking");
   const [route, setRoute] = useState<RoutePlan | null>(null);
   const [searchCoverage, setSearchCoverage] = useState<SearchCoverage | null>(null);
   const [showSearchCoverage, setShowSearchCoverage] = useState(true);
-  const [showWalkingLegs, setShowWalkingLegs] = useState(true);
+  const [showRouteLegs, setShowRouteLegs] = useState(true);
   const [loading, setLoading] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [updatingStopId, setUpdatingStopId] = useState<string | null>(null);
@@ -1373,7 +1427,7 @@ function AppContent() {
     if (selectedCategories.length < 1)
       return Alert.alert(
         "Choose an interest",
-        "Select at least one kind of place for your walking itinerary.",
+        "Select at least one kind of place for your itinerary.",
       );
     if (!start.trim() || (plannerMode === "journey" && !finish.trim()))
       return Alert.alert(
@@ -1551,7 +1605,7 @@ function AppContent() {
     if (route.stops.length >= 10 || categoryCount >= 5) {
       Alert.alert(
         "Stop limit reached",
-        "A walking itinerary can contain up to 10 stops and up to 5 from one interest.",
+        "An itinerary can contain up to 10 stops and up to 5 from one interest.",
       );
       return;
     }
@@ -1618,7 +1672,7 @@ function AppContent() {
       ],
     );
   };
-  const travelLabel = "walking";
+  const travelLabel = transportDetails(mode).label;
   const shareItinerary = async () => {
     if (!route || !mapRef.current || sharing) return;
     setSharing(true);
@@ -1661,7 +1715,7 @@ function AppContent() {
       await Sharing.shareAsync(cardUri, {
         mimeType: "image/png",
         UTI: "public.png",
-        dialogTitle: "Share your walking itinerary",
+        dialogTitle: "Share your itinerary",
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
@@ -1692,13 +1746,15 @@ function AppContent() {
         >
           {route && (
             <>
-              <Polyline
-                key="planned-route"
-                coordinates={route.coordinates}
-                strokeColor={colors.primary}
-                strokeWidth={6}
-                zIndex={5}
-              />
+              {route.legs.map((leg, index) => (
+                <Polyline
+                  key={`planned-route-${index}`}
+                  coordinates={leg.coordinates}
+                  strokeColor={legColor(leg.mode, colors.primary)}
+                  strokeWidth={6}
+                  zIndex={5}
+                />
+              ))}
               {!capturingShareMap && (
                 <>
                   <Marker
@@ -1796,7 +1852,7 @@ function AppContent() {
           )}
           {!capturingShareMap && route?.legs.map((leg, index) => (
             <Marker
-              key={`walking-leg-${index}`}
+              key={`route-leg-${index}`}
               coordinate={leg.midpoint}
               anchor={{ x: 0.5, y: index % 2 === 0 ? 1 : 0 }}
               zIndex={6}
@@ -1816,12 +1872,16 @@ function AppContent() {
                     styles.mapLegLabel,
                     {
                       backgroundColor: colors.card,
-                      borderColor: colors.primary,
-                      opacity: showWalkingLegs ? 1 : 0,
+                      borderColor: legColor(leg.mode, colors.primary),
+                      opacity: showRouteLegs ? 1 : 0,
                     },
                   ]}
                 >
-                  <MaterialCommunityIcons name="walk" size={11} color={colors.primary} />
+                  <MaterialCommunityIcons
+                    name={transportDetails(leg.mode).icon}
+                    size={11}
+                    color={legColor(leg.mode, colors.primary)}
+                  />
                   <Text
                     numberOfLines={1}
                     style={[styles.mapLegText, { color: colors.text }]}
@@ -1953,18 +2013,18 @@ function AppContent() {
             )}
             {route && (
               <Pressable
-                accessibilityLabel={`${showWalkingLegs ? "Hide" : "Show"} walking times and distances`}
-                accessibilityState={{ selected: showWalkingLegs }}
-                onPress={() => setShowWalkingLegs((visible) => !visible)}
+                accessibilityLabel={`${showRouteLegs ? "Hide" : "Show"} journey times and distances`}
+                accessibilityState={{ selected: showRouteLegs }}
+                onPress={() => setShowRouteLegs((visible) => !visible)}
                 style={[
                   styles.dockButton,
-                  { backgroundColor: showWalkingLegs ? colors.accent : colors.surface },
+                  { backgroundColor: showRouteLegs ? colors.accent : colors.surface },
                 ]}
               >
                 <MaterialCommunityIcons
-                  name="walk"
+                  name="transit-connection-variant"
                   size={24}
-                  color={showWalkingLegs ? "#fff" : colors.text}
+                  color={showRouteLegs ? "#fff" : colors.text}
                 />
               </Pressable>
             )}
@@ -2158,6 +2218,11 @@ function AppContent() {
                     </View>
                   </View>
                 )}
+                <View style={styles.transportHeading}>
+                  <Text style={[styles.sectionLabel, { color: colors.muted }]}>GETTING AROUND</Text>
+                  <Text style={[styles.transportHelp, { color: colors.muted }]}>Smart mix walks shorter legs and uses transport for longer ones.</Text>
+                </View>
+                <TransportSelector value={mode} onChange={setMode} colors={colors} />
                 <View style={styles.stopCountHeading}>
                   <View>
                     <Text style={[styles.sectionLabel, { color: colors.muted }]}>CHOOSE YOUR STOPS</Text>
@@ -2186,7 +2251,7 @@ function AppContent() {
                     <>
                       <MaterialCommunityIcons name="map-marker-path" size={21} color="#fff" />
                       <Text style={styles.primaryButtonText}>
-                        {route ? "Update my itinerary" : "Plan my walking itinerary"}
+                        {route ? "Update my itinerary" : "Plan my itinerary"}
                       </Text>
                       <Ionicons name="arrow-forward" size={21} color="#fff" />
                     </>
@@ -2262,8 +2327,8 @@ function AppContent() {
                     </View>
                   </View>
                   <Text style={[styles.infoIntro, { color: colors.text }]}>
-                    Create personalised walking itineraries from the places and
-                    activities that interest you.
+                    Create personalised local itineraries from the places and
+                    activities that interest you, with transport that suits the journey.
                   </Text>
                   <Text style={[styles.sectionLabel, { color: colors.muted }]}>
                     QUICK INFORMATION
@@ -2276,13 +2341,13 @@ function AppContent() {
                         "help",
                         "Help",
                         "help-buoy-outline",
-                        "Choose start and finish points or a local area, select your interests and number of stops, then plan your walking itinerary. Tap pins for place details or open the itinerary to review and reorder stops.",
+                        "Choose start and finish points or a local area, select your transport, interests and number of stops, then plan your itinerary. Tap pins for place details or open the itinerary to review and reorder stops.",
                       ],
                       [
                         "safety",
                         "Safety",
                         "shield-checkmark-outline",
-                        "Check opening information, accessibility, route conditions and local guidance before setting out. Stay aware of your surroundings and use designated walking routes.",
+                        "Check opening information, accessibility, transport status, route conditions and local guidance before setting out. Stay aware of your surroundings and follow designated routes.",
                       ],
                       [
                         "privacy",
@@ -2611,9 +2676,13 @@ function AppContent() {
                             { backgroundColor: colors.surface, borderColor: colors.border },
                           ]}
                         >
-                          <MaterialCommunityIcons name="walk" size={17} color={colors.primary} />
+                          <MaterialCommunityIcons
+                            name={transportDetails(route.legs[route.stops.length].mode).icon}
+                            size={17}
+                            color={legColor(route.legs[route.stops.length].mode, colors.primary)}
+                          />
                           <Text style={[styles.finalLegText, { color: colors.text }]}>
-                            Final stop to finish · {route.legs[route.stops.length].duration} · {route.legs[route.stops.length].distance}
+                            Final stop to finish · {transportDetails(route.legs[route.stops.length].mode).label} · {route.legs[route.stops.length].duration} · {route.legs[route.stops.length].distance}
                           </Text>
                         </View>
                       )}
@@ -3077,6 +3146,27 @@ const styles = StyleSheet.create({
   compactStepSymbol: { fontSize: 20, lineHeight: 21, fontWeight: "700" },
   compactStepValue: { minWidth: 34, textAlign: "center", fontSize: 17, fontWeight: "800" },
   interestHelp: { fontSize: 12, lineHeight: 17, marginTop: -2 },
+  transportHeading: { gap: 1 },
+  transportHelp: { fontSize: 12, lineHeight: 17 },
+  transportSelector: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 4,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+  },
+  transportOption: {
+    width: "49.3%",
+    minHeight: 38,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+  transportOptionText: { fontSize: 12.5, fontWeight: "700" },
   primaryButton: {
     minHeight: 50,
     borderRadius: 999,

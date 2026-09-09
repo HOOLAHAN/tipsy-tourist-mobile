@@ -7,6 +7,7 @@ import {
   PlaceSuggestion,
   RoutePlan,
   RouteLeg,
+  RouteLegMode,
   SearchCoverage,
   StopCategory,
   TravelMode,
@@ -252,28 +253,46 @@ export async function routeThroughStops(
   stops: Place[],
   mode: TravelMode,
 ): Promise<RoutePlan> {
-  const data = await post<any>("/directions", {
+  const points = [
     origin,
-    destination,
-    mode,
-    waypoints: stops.map((place) => ({
+    ...stops.map((place) => ({
       latitude: place.geometry.location.lat,
       longitude: place.geometry.location.lng,
     })),
+    destination,
+  ];
+  const requestedModes: RouteLegMode[] = points.slice(1).map((point, index) => {
+    if (mode !== "smart") return mode;
+    return distanceInMetres(points[index], point) <= 1600 ? "walking" : "transit";
   });
-  if (data.status !== "OK")
-    throw new Error(data.error_message || `No viable ${mode} route was found.`);
-  const route = data.routes[0];
-  const legs = route.legs as {
+  const requestLeg = async (index: number, requestedMode: RouteLegMode) => {
+    const data = await post<any>("/directions", {
+      origin: points[index],
+      destination: points[index + 1],
+      mode: requestedMode,
+      waypoints: [],
+    });
+    if (data.status !== "OK" || !data.routes?.[0]) {
+      if (mode === "smart" && requestedMode === "transit") {
+        return requestLeg(index, "driving");
+      }
+      throw new Error(data.error_message || `No viable ${requestedMode} route was found.`);
+    }
+    return { route: data.routes[0], mode: requestedMode };
+  };
+  const responses = await Promise.all(
+    requestedModes.map((requestedMode, index) => requestLeg(index, requestedMode)),
+  );
+  const rawLegs = responses.map(({ route }) => route.legs[0] as {
     distance: { value: number };
     duration: { value: number };
     start_location: { lat: number; lng: number };
     end_location: { lat: number; lng: number };
     steps?: { polyline?: { points?: string } }[];
-  }[];
-  const metres = legs.reduce((sum, leg) => sum + leg.distance.value, 0);
-  const seconds = legs.reduce((sum, leg) => sum + leg.duration.value, 0);
-  const routeLegs: RouteLeg[] = legs.map((leg) => {
+  });
+  const metres = rawLegs.reduce((sum, leg) => sum + leg.distance.value, 0);
+  const seconds = rawLegs.reduce((sum, leg) => sum + leg.duration.value, 0);
+  const routeLegs: RouteLeg[] = rawLegs.map((leg, legIndex) => {
     const stepCoordinates = (leg.steps ?? []).flatMap((step) =>
       step.polyline?.points
         ? polyline
@@ -318,14 +337,14 @@ export async function routeThroughStops(
           : `${leg.distance.value} m`,
       duration: `${Math.max(1, Math.round(leg.duration.value / 60))} min`,
       midpoint,
+      mode: responses[legIndex].mode,
+      coordinates,
     };
   });
   return {
     origin,
     destination,
-    coordinates: polyline
-      .decode(route.overview_polyline.points)
-      .map(([latitude, longitude]) => ({ latitude, longitude })),
+    coordinates: routeLegs.flatMap((leg) => leg.coordinates),
     stops,
     distance:
       metres >= 1000 ? `${(metres / 1000).toFixed(1)} km` : `${metres} m`,
