@@ -17,6 +17,14 @@ const API_URL =
   process.env.EXPO_PUBLIC_API_URL ??
   "https://t5jalxqqsb.execute-api.eu-west-2.amazonaws.com";
 
+const DEVICE_COUNTRY = (() => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().locale.split(/[-_]/)[1]?.toUpperCase() ?? "";
+  } catch {
+    return "";
+  }
+})();
+
 async function post<T>(path: string, body: object): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     method: "POST",
@@ -30,10 +38,10 @@ async function post<T>(path: string, body: object): Promise<T> {
   return payload as T;
 }
 
-export async function geocode(address: string): Promise<Coordinate> {
+export async function geocode(address: string, country = DEVICE_COUNTRY): Promise<Coordinate> {
   const result = await post<{ location: { lat: number; lng: number } }>(
     "/geocode",
-    { address },
+    { address, country },
   );
   return { latitude: result.location.lat, longitude: result.location.lng };
 }
@@ -93,8 +101,13 @@ function isQualityCandidate(
   const unsuitable = types.some((item) =>
     ["lodging", "travel_agency", "real_estate_agency"].includes(item),
   );
+  const categoryMismatch =
+    (category === "cafes" && (!types.includes("cafe") || types.some((item) => ["bar", "night_club"].includes(item)))) ||
+    (category === "food" && (!types.includes("restaurant") || types.some((item) => ["bar", "night_club", "cafe"].includes(item)))) ||
+    (category === "bars" && !types.some((item) => ["bar", "night_club"].includes(item)));
   return (
     !unsuitable &&
+    !categoryMismatch &&
     rating >= 4 &&
     reviews >= (["cafes", "food", "shopping", "bars"].includes(category) ? 20 : 10)
   );
@@ -106,6 +119,18 @@ function isUsableCandidate(place: Omit<Place, "category">) {
       place.geometry?.location &&
       place.business_status !== "CLOSED_PERMANENTLY",
   );
+}
+
+function matchesHospitalityCategory(
+  place: Omit<Place, "category">,
+  category: StopCategory,
+) {
+  const types = place.types ?? [];
+  if (types.includes("lodging")) return false;
+  if (category === "cafes") return types.includes("cafe") && !types.some((item) => ["bar", "night_club"].includes(item));
+  if (category === "food") return types.includes("restaurant") && !types.some((item) => ["bar", "night_club", "cafe"].includes(item));
+  if (category === "bars") return types.some((item) => ["bar", "night_club"].includes(item));
+  return true;
 }
 
 async function nearbyCandidates(
@@ -126,7 +151,7 @@ async function nearbyCandidates(
     quality.length
       ? quality
       : available.filter(
-          (item) => isUsableCandidate(item) && (item.rating ?? 0) >= 3.8,
+          (item) => isUsableCandidate(item) && matchesHospitalityCategory(item, category) && (item.rating ?? 0) >= 3.8,
         )
   )
     .sort(
@@ -261,12 +286,13 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
 
 export async function getPlaceSuggestions(
   input: string,
+  country?: string,
 ): Promise<PlaceSuggestion[]> {
   if (input.trim().length < 3) return [];
   const data = await post<{
     status: string;
     predictions?: any[];
-  }>("/autocomplete", { input: input.trim() });
+  }>("/autocomplete", { input: input.trim(), country });
   if (data.status !== "OK" && data.status !== "ZERO_RESULTS") return [];
   return (data.predictions ?? []).map((item: any) => ({
     place_id: item.place_id,

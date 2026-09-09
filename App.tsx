@@ -528,7 +528,7 @@ function AutocompleteInput({
     }
     const timer = setTimeout(
       () =>
-        getPlaceSuggestions(value)
+        getPlaceSuggestions(value, DEVICE_REGION)
           .then(setSuggestions)
           .catch(() => setSuggestions([])),
       300,
@@ -1772,6 +1772,8 @@ function AppContent() {
           );
       setRoute(next);
       setPlannerOpen(false);
+      setItineraryView("stops");
+      setTimeout(openItinerary, 160);
       requestAnimationFrame(() =>
         mapRef.current?.fitToCoordinates(next.coordinates, {
           edgePadding: { top: 170, right: 50, bottom: 130, left: 50 },
@@ -2535,7 +2537,7 @@ function AppContent() {
               </View>
               <ScrollView
                 ref={plannerScrollRef}
-                keyboardShouldPersistTaps="handled"
+                keyboardShouldPersistTaps="always"
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={[
                   styles.plannerContent,
