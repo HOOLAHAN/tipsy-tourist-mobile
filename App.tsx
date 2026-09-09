@@ -528,7 +528,9 @@ function CategoryQuantitySelector({
               styles.categoryQuantityCard,
               {
                 borderBottomColor: colors.border,
-                borderBottomWidth: index === STOP_CATEGORIES.length - 1 ? 0 : StyleSheet.hairlineWidth,
+                borderBottomWidth: index < STOP_CATEGORIES.length - 2 ? StyleSheet.hairlineWidth : 0,
+                borderRightColor: colors.border,
+                borderRightWidth: index % 2 === 0 ? StyleSheet.hairlineWidth : 0,
               },
             ]}
           >
@@ -540,7 +542,7 @@ function CategoryQuantitySelector({
             />
             <MaterialCommunityIcons
               name={category.icon as keyof typeof MaterialCommunityIcons.glyphMap}
-              size={22}
+              size={20}
               color={active ? category.color : colors.muted}
             />
             <Text
@@ -3335,14 +3337,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 18,
     overflow: "hidden",
+    flexDirection: "row",
+    flexWrap: "wrap",
   },
   categoryQuantityCard: {
-    minHeight: 49,
+    width: "50%",
+    minHeight: 54,
     flexDirection: "row",
     alignItems: "center",
-    paddingLeft: 15,
-    paddingRight: 10,
-    gap: 10,
+    paddingLeft: 12,
+    paddingRight: 7,
+    gap: 6,
   },
   categoryActiveIndicator: {
     position: "absolute",
@@ -3353,22 +3358,22 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 3,
     borderBottomRightRadius: 3,
   },
-  categoryQuantityLabel: { flex: 1, fontSize: 14 },
+  categoryQuantityLabel: { flex: 1, fontSize: 11.5 },
   compactStepper: {
-    width: 132,
+    width: 72,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   compactStepButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 25,
+    height: 25,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
   },
-  compactStepSymbol: { fontSize: 20, lineHeight: 21, fontWeight: "700" },
-  compactStepValue: { minWidth: 34, textAlign: "center", fontSize: 17, fontWeight: "800" },
+  compactStepSymbol: { fontSize: 18, lineHeight: 20, fontWeight: "700" },
+  compactStepValue: { minWidth: 18, textAlign: "center", fontSize: 15, fontWeight: "800" },
   interestHelp: { fontSize: 12, lineHeight: 17, marginTop: -2 },
   transportHeading: { gap: 1 },
   transportHelp: { fontSize: 12, lineHeight: 17 },
