@@ -282,6 +282,7 @@ export async function routeThroughStops(
   destination: Coordinate,
   stops: Place[],
   mode: TravelMode,
+  departureTime?: number,
 ): Promise<RoutePlan> {
   const points = [
     origin,
@@ -300,6 +301,7 @@ export async function routeThroughStops(
       origin: points[index],
       destination: points[index + 1],
       mode: requestedMode,
+      departureTime,
       waypoints: [],
     });
     if (data.status !== "OK" || !data.routes?.[0]) {
@@ -426,6 +428,7 @@ export async function routeThroughStops(
         ? `${Math.floor(seconds / 3600)} hr ${Math.round((seconds % 3600) / 60)} min`
         : `${Math.round(seconds / 60)} min`,
     legs: routeLegs,
+    departureTime,
   };
 }
 
@@ -445,7 +448,13 @@ export async function replaceRouteLeg(
   if (!points[index] || !points[index + 1]) {
     throw new Error("That journey leg is no longer available.");
   }
-  const replacement = await routeThroughStops(points[index], points[index + 1], [], mode);
+  const replacement = await routeThroughStops(
+    points[index],
+    points[index + 1],
+    [],
+    mode,
+    route.departureTime,
+  );
   const legs = [...route.legs];
   legs[index] = replacement.legs[0];
   const metres = legs.reduce((total, leg) => total + leg.distanceMetres, 0);
@@ -467,6 +476,7 @@ export async function planRoute(
   finishText: string,
   quantities: CategoryQuantities,
   mode: TravelMode,
+  departureTime?: number,
   onSearchCoverage?: (coverage: SearchCoverage) => void,
 ): Promise<RoutePlan> {
   const [origin, destination] = await Promise.all([
@@ -521,7 +531,7 @@ export async function planRoute(
       "We couldn't find enough suitable places along this route. Try fewer stops, different interests or nearby locations.",
     );
   }
-  return routeThroughStops(origin, destination, stops, mode);
+  return routeThroughStops(origin, destination, stops, mode, departureTime);
 }
 
 export async function planLocalTour(
@@ -529,6 +539,7 @@ export async function planLocalTour(
   radius: number,
   quantities: CategoryQuantities,
   mode: TravelMode,
+  departureTime?: number,
   onSearchCoverage?: (coverage: SearchCoverage) => void,
 ): Promise<RoutePlan> {
   const centre = await geocode(locationText);
@@ -586,7 +597,7 @@ export async function planLocalTour(
     );
     return aAngle - bAngle;
   });
-  return routeThroughStops(centre, centre, orderedStops, mode);
+  return routeThroughStops(centre, centre, orderedStops, mode, departureTime);
 }
 
 export async function findReplacementStop(

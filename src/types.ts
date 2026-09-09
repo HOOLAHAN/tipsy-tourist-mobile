@@ -76,6 +76,7 @@ export type RoutePlan = {
   distance: string;
   duration: string;
   legs: RouteLeg[];
+  departureTime?: number;
 };
 
 export type RouteLeg = {

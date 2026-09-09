@@ -1287,6 +1287,7 @@ function AppContent() {
   const [finish, setFinish] = useState("");
   const [plannerMode, setPlannerMode] = useState<"journey" | "local">("journey");
   const [localRadius, setLocalRadius] = useState(1500);
+  const [showCustomRadius, setShowCustomRadius] = useState(false);
   const [categoryQuantities, setCategoryQuantities] = useState<CategoryQuantities>(
     DEFAULT_CATEGORY_QUANTITIES,
   );
@@ -1298,7 +1299,11 @@ function AppContent() {
     0,
   );
   const [mode, setMode] = useState<TravelMode>("walking");
+  const [departureOffsetMinutes, setDepartureOffsetMinutes] = useState(0);
   const localRadiusMaximum = mode === "walking" ? 5000 : 15000;
+  const radiusPresets = mode === "walking"
+    ? [1000, 3000, 5000]
+    : [2000, 5000, 10000, 15000];
   const [route, setRoute] = useState<RoutePlan | null>(null);
   const [selectedRouteLegIndex, setSelectedRouteLegIndex] = useState<number | null>(null);
   const [searchCoverage, setSearchCoverage] = useState<SearchCoverage | null>(null);
@@ -1558,12 +1563,17 @@ function AppContent() {
     setSearchCoverage(null);
     setLoading(true);
     try {
+      const departureTime =
+        (mode === "transit" || mode === "smart") && departureOffsetMinutes > 0
+          ? Math.floor(Date.now() / 1000) + departureOffsetMinutes * 60
+          : undefined;
       const next = plannerMode === "local"
         ? await planLocalTour(
             start,
             localRadius,
             categoryQuantities,
             mode,
+            departureTime,
             setSearchCoverage,
           )
         : await planRoute(
@@ -1571,6 +1581,7 @@ function AppContent() {
             finish,
             categoryQuantities,
             mode,
+            departureTime,
             setSearchCoverage,
           );
       setRoute(next);
@@ -1629,6 +1640,7 @@ function AppContent() {
         route.destination,
         stops,
         mode,
+        previous.departureTime,
       );
       setRoute((current) =>
         current?.stops.map((place) => place.place_id).join("|") === stopOrder
@@ -1658,6 +1670,7 @@ function AppContent() {
         previous.destination,
         stops,
         mode,
+        previous.departureTime,
       );
       setRoute((current) =>
         current?.stops.map((place) => place.place_id).join("|") === stopOrder
@@ -2312,6 +2325,39 @@ function AppContent() {
                   <Text style={[styles.transportHelp, { color: colors.muted }]}>Smart mix walks shorter legs and uses transport for longer ones.</Text>
                 </View>
                 <TransportSelector value={mode} onChange={setMode} colors={colors} />
+                {mode === "smart" && (
+                  <View style={[styles.smartMixNotice, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <MaterialCommunityIcons name="information-outline" size={18} color={colors.primary} />
+                    <Text style={[styles.smartMixNoticeText, { color: colors.muted }]}>Walk legs up to 1.6 km, then use public transport. If transit is unavailable, a car/taxi estimate may be used.</Text>
+                  </View>
+                )}
+                {(mode === "transit" || mode === "smart") && (
+                  <View style={styles.departureSection}>
+                    <Text style={[styles.compactFieldLabel, { color: colors.muted }]}>LEAVE</Text>
+                    <View style={styles.departureOptions}>
+                      {[
+                        [0, "Now"],
+                        [30, "+30 min"],
+                        [60, "+1 hr"],
+                        [120, "+2 hr"],
+                      ].map(([minutes, label]) => {
+                        const selected = departureOffsetMinutes === minutes;
+                        return (
+                          <Pressable
+                            key={minutes}
+                            onPress={() => setDepartureOffsetMinutes(minutes as number)}
+                            style={[
+                              styles.departureOption,
+                              { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? `${colors.primary}14` : colors.surface },
+                            ]}
+                          >
+                            <Text style={[styles.departureOptionText, { color: selected ? colors.primary : colors.text }]}>{label}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
                 {plannerMode === "local" && (
                   <View
                     style={[
@@ -2330,36 +2376,59 @@ function AppContent() {
                           : `${localRadius} m`}
                       </Text>
                     </View>
-                    {Platform.OS === "android" ? (
-                      <AndroidRadiusSlider
-                        minimumValue={500}
-                        maximumValue={localRadiusMaximum}
-                        step={250}
-                        value={localRadius}
-                        onValueChange={setLocalRadius}
-                        minimumTrackTintColor={colors.primary}
-                        maximumTrackTintColor={colors.border}
-                      />
-                    ) : (
-                      <Slider
-                        accessibilityLabel="Local tour search radius"
-                        style={styles.radiusSlider}
-                        minimumValue={500}
-                        maximumValue={localRadiusMaximum}
-                        step={250}
-                        value={localRadius}
-                        onValueChange={setLocalRadius}
-                        minimumTrackTintColor={colors.primary}
-                        maximumTrackTintColor={colors.border}
-                        thumbTintColor={colors.primary}
-                      />
-                    )}
-                    <View style={styles.radiusRangeLabels}>
-                      <Text style={[styles.radiusRangeText, { color: colors.muted }]}>500 m</Text>
-                      <Text style={[styles.radiusRangeText, { color: colors.muted }]}>
-                        {localRadiusMaximum / 1000} km
-                      </Text>
+                    <View style={styles.radiusPresets}>
+                      {radiusPresets.map((radius) => {
+                        const selected = localRadius === radius;
+                        return (
+                          <Pressable
+                            key={radius}
+                            onPress={() => setLocalRadius(radius)}
+                            style={[
+                              styles.radiusPreset,
+                              { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? colors.primary : colors.card },
+                            ]}
+                          >
+                            <Text style={[styles.radiusPresetText, { color: selected ? "#fff" : colors.text }]}>{radius / 1000} km</Text>
+                          </Pressable>
+                        );
+                      })}
                     </View>
+                    <Pressable onPress={() => setShowCustomRadius((visible) => !visible)} style={styles.customRadiusToggle}>
+                      <Text style={[styles.customRadiusText, { color: colors.primary }]}>{showCustomRadius ? "Hide exact adjustment" : "Adjust exact distance"}</Text>
+                      <Ionicons name={showCustomRadius ? "chevron-up" : "chevron-down"} size={16} color={colors.primary} />
+                    </Pressable>
+                    {showCustomRadius && (
+                      <>
+                        {Platform.OS === "android" ? (
+                          <AndroidRadiusSlider
+                            minimumValue={500}
+                            maximumValue={localRadiusMaximum}
+                            step={250}
+                            value={localRadius}
+                            onValueChange={setLocalRadius}
+                            minimumTrackTintColor={colors.primary}
+                            maximumTrackTintColor={colors.border}
+                          />
+                        ) : (
+                          <Slider
+                            accessibilityLabel="Local tour search radius"
+                            style={styles.radiusSlider}
+                            minimumValue={500}
+                            maximumValue={localRadiusMaximum}
+                            step={250}
+                            value={localRadius}
+                            onValueChange={setLocalRadius}
+                            minimumTrackTintColor={colors.primary}
+                            maximumTrackTintColor={colors.border}
+                            thumbTintColor={colors.primary}
+                          />
+                        )}
+                        <View style={styles.radiusRangeLabels}>
+                          <Text style={[styles.radiusRangeText, { color: colors.muted }]}>500 m</Text>
+                          <Text style={[styles.radiusRangeText, { color: colors.muted }]}>{localRadiusMaximum / 1000} km</Text>
+                        </View>
+                      </>
+                    )}
                   </View>
                 )}
                 <View style={styles.stopCountHeading}>
@@ -2375,6 +2444,31 @@ function AppContent() {
                   onChange={setCategoryQuantity}
                   colors={colors}
                 />
+                {route && (
+                  <Pressable onPress={clear} style={styles.sheetClear}>
+                    <Ionicons
+                      name="trash-outline"
+                      size={18}
+                      color={colors.muted}
+                    />
+                    <Text
+                      style={[styles.sheetClearText, { color: colors.muted }]}
+                    >
+                      Clear current route
+                    </Text>
+                  </Pressable>
+                )}
+              </ScrollView>
+              <View
+                style={[
+                  styles.plannerStickyAction,
+                  {
+                    backgroundColor: colors.card,
+                    borderTopColor: colors.border,
+                    paddingBottom: 10 + (Platform.OS === "android" ? safeAreaInsets.bottom : 0),
+                  },
+                ]}
+              >
                 <Pressable
                   disabled={loading}
                   onPress={submit}
@@ -2396,21 +2490,7 @@ function AppContent() {
                     </>
                   )}
                 </Pressable>
-                {route && (
-                  <Pressable onPress={clear} style={styles.sheetClear}>
-                    <Ionicons
-                      name="trash-outline"
-                      size={18}
-                      color={colors.muted}
-                    />
-                    <Text
-                      style={[styles.sheetClearText, { color: colors.muted }]}
-                    >
-                      Clear current route
-                    </Text>
-                  </Pressable>
-                )}
-              </ScrollView>
+              </View>
             </Animated.View>
           </KeyboardAvoidingView>
         </Modal>
@@ -2996,6 +3076,11 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === "ios" ? 24 : 18,
     gap: 8,
   },
+  plannerStickyAction: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+  },
   plannerModeSwitch: {
     flexDirection: "row",
     borderWidth: 1,
@@ -3043,6 +3128,24 @@ const styles = StyleSheet.create({
   },
   radiusHelp: { fontSize: 11, marginTop: 2 },
   radiusValue: { fontSize: 17, fontWeight: "800" },
+  radiusPresets: { flexDirection: "row", gap: 6, marginTop: 9 },
+  radiusPreset: {
+    flex: 1,
+    minHeight: 34,
+    borderWidth: 1,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  radiusPresetText: { fontSize: 12, fontWeight: "700" },
+  customRadiusToggle: {
+    minHeight: 32,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  customRadiusText: { fontSize: 11.5, fontWeight: "700" },
   radiusSlider: {
     width: "100%",
     height: 40,
@@ -3377,6 +3480,28 @@ const styles = StyleSheet.create({
   interestHelp: { fontSize: 12, lineHeight: 17, marginTop: -2 },
   transportHeading: { gap: 1 },
   transportHelp: { fontSize: 12, lineHeight: 17 },
+  smartMixNotice: {
+    borderWidth: 1,
+    borderRadius: 13,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 7,
+  },
+  smartMixNoticeText: { flex: 1, fontSize: 11.5, lineHeight: 16 },
+  departureSection: { gap: 5 },
+  compactFieldLabel: { fontSize: 10.5, fontWeight: "800", letterSpacing: 1.3 },
+  departureOptions: { flexDirection: "row", gap: 6 },
+  departureOption: {
+    flex: 1,
+    minHeight: 34,
+    borderWidth: 1,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  departureOptionText: { fontSize: 11.5, fontWeight: "700" },
   transportSelector: {
     borderWidth: 1,
     borderRadius: 16,
