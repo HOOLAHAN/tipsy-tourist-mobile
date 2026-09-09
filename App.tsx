@@ -510,12 +510,14 @@ function AutocompleteInput({
   onChange,
   placeholder,
   onLocate,
+  onSuggestionsShown,
   colors,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
   onLocate: () => void;
+  onSuggestionsShown?: () => void;
   colors: (typeof themes)[ThemeName];
 }) {
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
@@ -529,7 +531,12 @@ function AutocompleteInput({
     const timer = setTimeout(
       () =>
         getPlaceSuggestions(value, DEVICE_REGION)
-          .then(setSuggestions)
+          .then((results) => {
+            setSuggestions(results);
+            if (results.length > 0) {
+              requestAnimationFrame(() => onSuggestionsShown?.());
+            }
+          })
           .catch(() => setSuggestions([])),
       300,
     );
@@ -1476,6 +1483,7 @@ function AppContent() {
   const [showSearchCoverage, setShowSearchCoverage] = useState(true);
   const [showRouteLegs, setShowRouteLegs] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [updatingStopId, setUpdatingStopId] = useState<string | null>(null);
   const [capturingShareMap, setCapturingShareMap] = useState(false);
@@ -1492,6 +1500,14 @@ function AppContent() {
   useEffect(() => {
     plannerScrollRef.current?.scrollTo({ y: 0, animated: false });
   }, [plannerStep]);
+  useEffect(() => {
+    const show = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow", () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", () => setKeyboardVisible(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
   const plannerClosingRef = useRef(false);
   const itineraryClosingRef = useRef(false);
   const infoClosingRef = useRef(false);
@@ -2592,6 +2608,7 @@ function AppContent() {
                     onChange={setStart}
                     placeholder={plannerMode === "local" ? "Tour location" : "Start location"}
                     onLocate={() => locateMe("start")}
+                    onSuggestionsShown={() => plannerScrollRef.current?.scrollTo({ y: 120, animated: true })}
                     colors={colors}
                   />
                   {plannerMode === "journey" && (
@@ -2607,6 +2624,7 @@ function AppContent() {
                         onChange={setFinish}
                         placeholder="Finish location"
                         onLocate={() => locateMe("finish")}
+                        onSuggestionsShown={() => plannerScrollRef.current?.scrollTo({ y: 185, animated: true })}
                         colors={colors}
                       />
                     </>
@@ -2856,9 +2874,11 @@ function AppContent() {
                     backgroundColor: colors.card,
                     borderTopColor: colors.border,
                     paddingBottom:
-                      Platform.OS === "android"
-                        ? 20 + Math.max(safeAreaInsets.bottom, 28)
-                        : 24 + safeAreaInsets.bottom,
+                      keyboardVisible
+                        ? 8
+                        : Platform.OS === "android"
+                          ? 20 + Math.max(safeAreaInsets.bottom, 28)
+                          : 24 + safeAreaInsets.bottom,
                   },
                 ]}
               >
