@@ -210,14 +210,22 @@ function adaptiveSearchRadius(
   start: Coordinate,
   end: Coordinate,
   searchCount: number,
+  mode: TravelMode,
 ) {
   const routeDistance = distanceInMetres(start, end);
   if (routeDistance < LOCAL_SEARCH_THRESHOLD_METRES) {
     return LOCAL_SEARCH_RADIUS_METRES;
   }
   const gaps = Math.max(searchCount - 1, 1);
-  const overlappingRadius = (routeDistance / gaps) * 0.6;
-  return Math.round(Math.min(3000, Math.max(400, overlappingRadius)));
+  const transportEnabled = mode !== "walking";
+  const overlappingRadius =
+    (routeDistance / gaps) * (transportEnabled ? 0.85 : 0.6);
+  return Math.round(
+    Math.min(
+      transportEnabled ? 7500 : 3000,
+      Math.max(transportEnabled ? 750 : 400, overlappingRadius),
+    ),
+  );
 }
 
 function distributedCategories(quantities: CategoryQuantities) {
@@ -477,6 +485,7 @@ export async function planRoute(
     origin,
     destination,
     stopCategories.length,
+    mode,
   );
   onSearchCoverage?.({
     path: [origin, destination],
@@ -523,7 +532,8 @@ export async function planLocalTour(
   onSearchCoverage?: (coverage: SearchCoverage) => void,
 ): Promise<RoutePlan> {
   const centre = await geocode(locationText);
-  const searchRadius = Math.round(Math.min(5000, Math.max(500, radius)));
+  const maximumRadius = mode === "walking" ? 5000 : 15000;
+  const searchRadius = Math.round(Math.min(maximumRadius, Math.max(500, radius)));
   const stopCategories = distributedCategories(quantities);
   const categories = [...new Set(stopCategories)];
   onSearchCoverage?.({

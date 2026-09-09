@@ -1296,6 +1296,7 @@ function AppContent() {
     0,
   );
   const [mode, setMode] = useState<TravelMode>("walking");
+  const localRadiusMaximum = mode === "walking" ? 5000 : 15000;
   const [route, setRoute] = useState<RoutePlan | null>(null);
   const [selectedRouteLegIndex, setSelectedRouteLegIndex] = useState<number | null>(null);
   const [searchCoverage, setSearchCoverage] = useState<SearchCoverage | null>(null);
@@ -1310,6 +1311,11 @@ function AppContent() {
   const plannerTranslateY = useRef(new Animated.Value(0)).current;
   const itineraryTranslateY = useRef(new Animated.Value(0)).current;
   const infoTranslateY = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (localRadius > localRadiusMaximum) {
+      setLocalRadius(localRadiusMaximum);
+    }
+  }, [localRadius, localRadiusMaximum]);
   const plannerClosingRef = useRef(false);
   const itineraryClosingRef = useRef(false);
   const infoClosingRef = useRef(false);
@@ -2299,6 +2305,11 @@ function AppContent() {
                     </>
                   )}
                 </View>
+                <View style={styles.transportHeading}>
+                  <Text style={[styles.sectionLabel, { color: colors.muted }]}>GETTING AROUND</Text>
+                  <Text style={[styles.transportHelp, { color: colors.muted }]}>Smart mix walks shorter legs and uses transport for longer ones.</Text>
+                </View>
+                <TransportSelector value={mode} onChange={setMode} colors={colors} />
                 {plannerMode === "local" && (
                   <View
                     style={[
@@ -2320,7 +2331,7 @@ function AppContent() {
                     {Platform.OS === "android" ? (
                       <AndroidRadiusSlider
                         minimumValue={500}
-                        maximumValue={5000}
+                        maximumValue={localRadiusMaximum}
                         step={250}
                         value={localRadius}
                         onValueChange={setLocalRadius}
@@ -2332,7 +2343,7 @@ function AppContent() {
                         accessibilityLabel="Local tour search radius"
                         style={styles.radiusSlider}
                         minimumValue={500}
-                        maximumValue={5000}
+                        maximumValue={localRadiusMaximum}
                         step={250}
                         value={localRadius}
                         onValueChange={setLocalRadius}
@@ -2343,15 +2354,12 @@ function AppContent() {
                     )}
                     <View style={styles.radiusRangeLabels}>
                       <Text style={[styles.radiusRangeText, { color: colors.muted }]}>500 m</Text>
-                      <Text style={[styles.radiusRangeText, { color: colors.muted }]}>5 km</Text>
+                      <Text style={[styles.radiusRangeText, { color: colors.muted }]}>
+                        {localRadiusMaximum / 1000} km
+                      </Text>
                     </View>
                   </View>
                 )}
-                <View style={styles.transportHeading}>
-                  <Text style={[styles.sectionLabel, { color: colors.muted }]}>GETTING AROUND</Text>
-                  <Text style={[styles.transportHelp, { color: colors.muted }]}>Smart mix walks shorter legs and uses transport for longer ones.</Text>
-                </View>
-                <TransportSelector value={mode} onChange={setMode} colors={colors} />
                 <View style={styles.stopCountHeading}>
                   <View>
                     <Text style={[styles.sectionLabel, { color: colors.muted }]}>CHOOSE YOUR STOPS</Text>
