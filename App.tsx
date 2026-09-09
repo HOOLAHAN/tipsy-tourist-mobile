@@ -78,6 +78,14 @@ const SUPPORT_BASE_URL =
   process.env.EXPO_PUBLIC_SUPPORT_URL ??
   "https://d3pbhrkalr09t8.cloudfront.net";
 const SHARE_MAP_ASPECT = 1080 / 600;
+const COORDINATE_LOCATION_PATTERN = /^-?\d{1,3}(?:\.\d+)?\s*,\s*-?\d{1,3}(?:\.\d+)?$/;
+
+function displayLocation(value: string) {
+  return COORDINATE_LOCATION_PATTERN.test(value.trim())
+    ? "Your current location"
+    : value;
+}
+
 function RainbowTitle() {
   const colors = ["#ea4335", "#fbbc05", "#4285f4", "#34a853"];
   return (
@@ -420,7 +428,12 @@ function AutocompleteInput({
 }) {
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [focused, setFocused] = useState(false);
+  const containsCoordinates = COORDINATE_LOCATION_PATTERN.test(value.trim());
   useEffect(() => {
+    if (COORDINATE_LOCATION_PATTERN.test(value.trim())) {
+      setSuggestions([]);
+      return;
+    }
     const timer = setTimeout(
       () =>
         getPlaceSuggestions(value)
@@ -434,7 +447,8 @@ function AutocompleteInput({
     <View style={styles.autocompleteWrap}>
       <View style={styles.locationRow}>
         <TextInput
-          value={value}
+          value={displayLocation(value)}
+          selectTextOnFocus={containsCoordinates}
           onChangeText={(next) => {
             onChange(next);
             setFocused(true);
@@ -540,29 +554,30 @@ function CategoryQuantitySelector({
                 { backgroundColor: active ? category.color : "transparent" },
               ]}
             />
-            <MaterialCommunityIcons
-              name={category.icon as keyof typeof MaterialCommunityIcons.glyphMap}
-              size={20}
-              color={active ? category.color : colors.muted}
-            />
-            <Text
-              numberOfLines={1}
-              style={[
-                styles.categoryQuantityLabel,
-                { color: colors.text, fontWeight: active ? "700" : "600" },
-              ]}
-            >
-              {category.label}
-            </Text>
-            <View style={styles.compactStepper}>
+            <View style={styles.categoryIdentity}>
+              <MaterialCommunityIcons
+                name={category.icon as keyof typeof MaterialCommunityIcons.glyphMap}
+                size={22}
+                color={active ? category.color : colors.muted}
+              />
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.categoryQuantityLabel,
+                  { color: colors.text, fontWeight: active ? "700" : "600" },
+                ]}
+              >
+                {category.label}
+              </Text>
+            </View>
+            <View style={[styles.compactStepper, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Remove one ${category.singular}`}
                 accessibilityState={{ disabled: value === 0 }}
                 disabled={value === 0}
-                hitSlop={8}
                 onPress={() => onChange(category.id, value - 1)}
-                style={[styles.compactStepButton, { opacity: value === 0 ? 0.3 : 1 }]}
+                style={[styles.compactStepButton, { opacity: value === 0 ? 0.35 : 1 }]}
               >
                 <Text style={[styles.compactStepSymbol, { color: colors.text }]}>−</Text>
               </Pressable>
@@ -574,11 +589,10 @@ function CategoryQuantitySelector({
                 accessibilityLabel={`Add one ${category.singular}`}
                 accessibilityState={{ disabled: cannotAdd }}
                 disabled={cannotAdd}
-                hitSlop={8}
                 onPress={() => onChange(category.id, value + 1)}
                 style={[
                   styles.compactStepButton,
-                  { backgroundColor: colors.primary, opacity: cannotAdd ? 0.3 : 1 },
+                  { backgroundColor: category.color, opacity: cannotAdd ? 0.3 : 1 },
                 ]}
               >
                 <Text style={[styles.compactStepSymbol, { color: "#fff" }]}>+</Text>
@@ -1218,7 +1232,7 @@ const ShareCard = forwardRef<
         <View style={{ flex: 1 }}>
           <Text style={styles.shareEndpointLabel}>START</Text>
           <Text numberOfLines={1} style={styles.shareEndpointText}>
-            {start}
+            {displayLocation(start)}
           </Text>
         </View>
       </View>
@@ -1261,7 +1275,7 @@ const ShareCard = forwardRef<
         <View style={{ flex: 1 }}>
           <Text style={styles.shareEndpointLabel}>FINISH</Text>
           <Text numberOfLines={1} style={styles.shareEndpointText}>
-            {finish}
+            {displayLocation(finish)}
           </Text>
         </View>
       </View>
@@ -2560,7 +2574,9 @@ function AppContent() {
                       <View style={styles.plannerReviewCopy}>
                         <Text style={[styles.plannerReviewLabel, { color: colors.muted }]}>ROUTE</Text>
                         <Text numberOfLines={2} style={[styles.plannerReviewValue, { color: colors.text }]}>
-                          {plannerMode === "local" ? `Local tour from ${start}` : `${start} → ${finish}`}
+                          {plannerMode === "local"
+                            ? `Local tour from ${displayLocation(start)}`
+                            : `${displayLocation(start)} → ${displayLocation(finish)}`}
                         </Text>
                       </View>
                       <Pressable onPress={() => setPlannerStep(0)} style={styles.plannerReviewEdit}>
@@ -2634,7 +2650,10 @@ function AppContent() {
                   {
                     backgroundColor: colors.card,
                     borderTopColor: colors.border,
-                    paddingBottom: 10 + (Platform.OS === "android" ? safeAreaInsets.bottom : 0),
+                    paddingBottom:
+                      Platform.OS === "android"
+                        ? 10 + Math.max(safeAreaInsets.bottom, 28)
+                        : 14,
                   },
                 ]}
               >
@@ -3123,8 +3142,8 @@ function AppContent() {
             <ShareCard
               ref={shareCardRef}
               route={route}
-              start={start}
-              finish={plannerMode === "local" ? start : finish}
+              start={displayLocation(start)}
+              finish={displayLocation(plannerMode === "local" ? start : finish)}
               travelLabel={travelLabel}
               mapUri={shareMapUri}
               onMapLoaded={() => shareImageLoadedRef.current?.()}
@@ -3686,12 +3705,10 @@ const styles = StyleSheet.create({
   },
   categoryQuantityCard: {
     width: "50%",
-    minHeight: 54,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingLeft: 12,
-    paddingRight: 7,
-    gap: 6,
+    minHeight: 92,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    gap: 7,
   },
   categoryActiveIndicator: {
     position: "absolute",
@@ -3702,22 +3719,31 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 3,
     borderBottomRightRadius: 3,
   },
-  categoryQuantityLabel: { flex: 1, fontSize: 11.5 },
+  categoryIdentity: {
+    minHeight: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  categoryQuantityLabel: { flex: 1, fontSize: 12.5 },
   compactStepper: {
-    width: 72,
+    width: "100%",
+    minHeight: 40,
+    borderWidth: 1,
+    borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    overflow: "hidden",
   },
   compactStepButton: {
-    width: 25,
-    height: 25,
-    borderRadius: 13,
+    width: 42,
+    minHeight: 40,
     alignItems: "center",
     justifyContent: "center",
   },
-  compactStepSymbol: { fontSize: 18, lineHeight: 20, fontWeight: "700" },
-  compactStepValue: { minWidth: 18, textAlign: "center", fontSize: 15, fontWeight: "800" },
+  compactStepSymbol: { fontSize: 22, lineHeight: 24, fontWeight: "700" },
+  compactStepValue: { flex: 1, textAlign: "center", fontSize: 16, fontWeight: "800" },
   interestHelp: { fontSize: 12, lineHeight: 17, marginTop: -2 },
   transportHeading: { gap: 1 },
   transportHelp: { fontSize: 12, lineHeight: 17 },
