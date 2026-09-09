@@ -76,7 +76,7 @@ const LONDON: Region = {
 const BLUE = "#4285f4";
 const SUPPORT_BASE_URL =
   process.env.EXPO_PUBLIC_SUPPORT_URL ??
-  "https://d3pbhrkalr09t8.cloudfront.net";
+  "https://trippa.ijrhservices.co.uk";
 const SHARE_MAP_ASPECT = 1080 / 600;
 const COORDINATE_LOCATION_PATTERN = /^-?\d{1,3}(?:\.\d+)?\s*,\s*-?\d{1,3}(?:\.\d+)?$/;
 

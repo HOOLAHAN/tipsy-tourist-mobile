@@ -9,21 +9,24 @@
       "distribution": "internal",
       "environment": "development",
       "env": {
-        "EXPO_PUBLIC_TIPSY_TOURIST_ENVIRONMENT": "development"
+        "EXPO_PUBLIC_TIPSY_TOURIST_ENVIRONMENT": "development",
+        "EXPO_PUBLIC_SUPPORT_URL": "https://trippa.ijrhservices.co.uk"
       }
     },
     "preview": {
       "distribution": "internal",
       "environment": "development",
       "env": {
-        "EXPO_PUBLIC_TIPSY_TOURIST_ENVIRONMENT": "development"
+        "EXPO_PUBLIC_TIPSY_TOURIST_ENVIRONMENT": "development",
+        "EXPO_PUBLIC_SUPPORT_URL": "https://trippa.ijrhservices.co.uk"
       }
     },
     "production": {
       "autoIncrement": true,
       "environment": "production",
       "env": {
-        "EXPO_PUBLIC_TIPSY_TOURIST_ENVIRONMENT": "production"
+        "EXPO_PUBLIC_TIPSY_TOURIST_ENVIRONMENT": "production",
+        "EXPO_PUBLIC_SUPPORT_URL": "https://trippa.ijrhservices.co.uk"
       }
     }
   },
