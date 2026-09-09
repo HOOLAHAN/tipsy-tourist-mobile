@@ -2990,7 +2990,7 @@ function AppContent() {
                   <Pressable
                     onPress={() =>
                       Linking.openURL(
-                        "mailto:info@ijrhservices.co.uk?subject=Tipsy%20Tourist%20support",
+                        "mailto:info@ijrhservices.co.uk?subject=Trippa%20support",
                       )
                     }
                     style={[

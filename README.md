@@ -7,7 +7,8 @@ The project targets Expo SDK 54 so it runs in the current App Store and Play Sto
 ## Features
 
 - Plan a route between an address, postcode, or coordinate pair
-- Choose pub and attraction counts and walking, cycling, or driving
+- Choose from 14 interest categories, with up to 5 of each type and 10 stops overall
+- Travel by walking, cycling, public transport, taxi, or a smart mix
 - Plot the optimised route and numbered stops on a native map
 - Use the device location as the route start
 - View venue details and open phone numbers or websites
