@@ -1411,6 +1411,8 @@ function AppContent() {
   const [infoSection, setInfoSection] = useState<string | null>("safety");
   const [itineraryOpen, setItineraryOpen] = useState(false);
   const [itineraryView, setItineraryView] = useState<"stops" | "transport">("stops");
+  const [addStopPickerOpen, setAddStopPickerOpen] = useState(false);
+  const [legDetailsFromItinerary, setLegDetailsFromItinerary] = useState(false);
   const [routeFailure, setRouteFailure] = useState<string | null>(null);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [detailsFromItinerary, setDetailsFromItinerary] = useState(false);
@@ -1519,6 +1521,19 @@ function AppContent() {
     itineraryTranslateY.setValue(0);
     setItineraryOpen(true);
   };
+  const openItineraryLeg = (index: number) => {
+    Haptics.selectionAsync();
+    setLegDetailsFromItinerary(true);
+    setItineraryOpen(false);
+    setTimeout(() => setSelectedRouteLegIndex(index), 220);
+  };
+  const closeRouteLegDetails = () => {
+    setSelectedRouteLegIndex(null);
+    if (legDetailsFromItinerary) {
+      setLegDetailsFromItinerary(false);
+      setTimeout(openItinerary, 120);
+    }
+  };
   const closeItinerary = () => {
     if (itineraryClosingRef.current) return;
     itineraryClosingRef.current = true;
@@ -1528,6 +1543,7 @@ function AppContent() {
       useNativeDriver: true,
     }).start(() => {
       setItineraryOpen(false);
+      setAddStopPickerOpen(false);
       setDetailsFromItinerary(false);
       setSelectedPlace(null);
       detailTranslateX.setValue(420);
@@ -1985,17 +2001,7 @@ function AppContent() {
   };
   const chooseStopToAdd = () => {
     if (!route || updatingStopId) return;
-    Alert.alert(
-      "Add a stop",
-      "What would you like along the route?",
-      [
-        ...STOP_CATEGORIES.map((category) => ({
-          text: category.label,
-          onPress: () => addStop(category.id),
-        })),
-        { text: "Cancel", style: "cancel" as const },
-      ],
-    );
+    setAddStopPickerOpen(true);
   };
   const travelLabel = transportDetails(mode).label;
   const plannerSteps = ["Route", "Transport", "Stops", "Review"];
@@ -3066,12 +3072,10 @@ function AppContent() {
           visible={itineraryOpen}
           transparent
           animationType="none"
-          onRequestClose={
-            detailsFromItinerary ? closeItineraryPlace : closeItinerary
-          }
+          onRequestClose={addStopPickerOpen ? () => setAddStopPickerOpen(false) : detailsFromItinerary ? closeItineraryPlace : closeItinerary}
         >
           <View style={[styles.modalOverlay, styles.bottomModalOverlay]}>
-            <Pressable style={styles.modalDismiss} onPress={closeItinerary} />
+            <Pressable style={styles.modalDismiss} onPress={addStopPickerOpen ? () => setAddStopPickerOpen(false) : closeItinerary} />
             <SafeAreaView
               edges={["left", "right"]}
               style={[styles.modalSafe, styles.bottomModalSafe]}
@@ -3095,7 +3099,55 @@ function AppContent() {
                 >
                   <View style={styles.modalHandle} />
                 </View>
-                {detailsFromItinerary && selectedPlace ? (
+                {addStopPickerOpen ? (
+                  <View style={styles.drawerPage}>
+                    <View style={styles.modalHeader}>
+                      <View style={styles.drawerTitleRow}>
+                        <Pressable
+                          accessibilityLabel="Back to itinerary"
+                          onPress={() => setAddStopPickerOpen(false)}
+                          style={[styles.backButton, { backgroundColor: colors.surface }]}
+                        >
+                          <Ionicons name="arrow-back" size={22} color={colors.text} />
+                        </Pressable>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.modalTitle, { color: colors.text }]}>Add a stop</Text>
+                          <Text style={[styles.modalSubtitle, { color: colors.muted }]}>What would you like along the route?</Text>
+                        </View>
+                      </View>
+                    </View>
+                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.addStopGrid}>
+                      {STOP_CATEGORIES.map((category) => {
+                        const currentCount = route?.stops.filter((stop) => stop.category === category.id).length ?? 0;
+                        const disabled = !route || route.stops.length >= 10 || currentCount >= 5;
+                        return (
+                          <Pressable
+                            key={category.id}
+                            accessibilityRole="button"
+                            accessibilityState={{ disabled }}
+                            disabled={disabled}
+                            onPress={() => {
+                              setAddStopPickerOpen(false);
+                              addStop(category.id);
+                            }}
+                            style={({ pressed }) => [
+                              styles.addStopOption,
+                              { backgroundColor: category.background, borderColor: `${category.color}55` },
+                              pressed && !disabled && styles.addStopOptionPressed,
+                              disabled && styles.addStopOptionDisabled,
+                            ]}
+                          >
+                            <View style={[styles.addStopIcon, { backgroundColor: `${category.color}18` }]}>
+                              <MaterialCommunityIcons name={category.icon as keyof typeof MaterialCommunityIcons.glyphMap} size={25} color={category.color} />
+                            </View>
+                            <Text numberOfLines={2} style={[styles.addStopLabel, { color: category.color }]}>{category.label}</Text>
+                            <Ionicons name="add-circle" size={25} color={category.color} />
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                ) : detailsFromItinerary && selectedPlace ? (
                   <Animated.View
                     style={[
                       styles.drawerPage,
@@ -3285,7 +3337,7 @@ function AppContent() {
                           updating={updatingStopId === place.place_id}
                           onRegenerate={() => regenerateStop(place)}
                           onRemove={() => removeStop(place)}
-                          onOpenLeg={() => setSelectedRouteLegIndex(index)}
+                          onOpenLeg={() => openItineraryLeg(index)}
                           leg={route.legs[index]}
                         />
                       ))}
@@ -3293,7 +3345,7 @@ function AppContent() {
                         <Pressable
                           accessibilityRole="button"
                           accessibilityLabel="Open final journey details"
-                          onPress={() => setSelectedRouteLegIndex(route.stops.length)}
+                          onPress={() => openItineraryLeg(route.stops.length)}
                           style={[
                             styles.finalLeg,
                             { backgroundColor: colors.surface, borderColor: colors.border },
@@ -3324,7 +3376,7 @@ function AppContent() {
                             from={from}
                             to={to}
                             colors={colors}
-                            onOpen={() => setSelectedRouteLegIndex(index)}
+                            onOpen={() => openItineraryLeg(index)}
                           />
                         );
                       })}
@@ -3372,7 +3424,7 @@ function AppContent() {
         <RouteLegDetailsSheet
           leg={selectedRouteLegIndex === null ? null : route?.legs[selectedRouteLegIndex] ?? null}
           index={selectedRouteLegIndex ?? 0}
-          onClose={() => setSelectedRouteLegIndex(null)}
+          onClose={closeRouteLegDetails}
           onModeChange={changeRouteLegMode}
           onRefresh={refreshRouteLeg}
           colors={colors}
@@ -3747,6 +3799,27 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   itineraryViewButtonText: { fontSize: 13, fontWeight: "800" },
+  addStopGrid: {
+    paddingHorizontal: 18,
+    paddingTop: 8,
+    paddingBottom: 30,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  addStopOption: {
+    width: "48.5%",
+    minHeight: 108,
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 13,
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  addStopOptionPressed: { transform: [{ scale: 0.98 }], opacity: 0.82 },
+  addStopOptionDisabled: { opacity: 0.35 },
+  addStopIcon: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  addStopLabel: { fontSize: 15, lineHeight: 18, fontWeight: "800", marginVertical: 7 },
   modalDragZone: { height: 46, alignItems: "center", justifyContent: "center" },
   drawerPage: { flex: 1, minHeight: 0, overflow: "hidden" },
   drawerTitleRow: { flexDirection: "row", alignItems: "center", gap: 12 },
