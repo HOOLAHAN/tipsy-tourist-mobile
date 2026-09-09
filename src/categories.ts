@@ -25,12 +25,12 @@ export const STOP_CATEGORIES: {
 ];
 
 export const DEFAULT_CATEGORY_QUANTITIES: CategoryQuantities = {
-  landmarks: 2,
-  museums: 1,
+  landmarks: 1,
+  museums: 0,
   galleries: 0,
   parks: 1,
   cafes: 0,
-  food: 0,
+  food: 1,
   shopping: 0,
   markets: 0,
   family: 0,

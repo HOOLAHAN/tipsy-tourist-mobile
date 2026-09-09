@@ -311,16 +311,47 @@ function RouteLegDetailsSheet({
 }) {
   const [switchingTo, setSwitchingTo] = useState<RouteLegMode | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const translateY = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (leg) translateY.setValue(0);
+  }, [leg, translateY]);
+  const dismiss = () => {
+    Animated.timing(translateY, {
+      toValue: 760,
+      duration: 210,
+      useNativeDriver: true,
+    }).start(onClose);
+  };
+  const panResponder = useMemo(
+    () => PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gesture) => gesture.dy > 3 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+      onPanResponderMove: (_, gesture) => translateY.setValue(Math.max(0, gesture.dy)),
+      onPanResponderRelease: (_, gesture) => {
+        if (gesture.dy > 80 || gesture.vy > 0.7) dismiss();
+        else Animated.spring(translateY, { toValue: 0, damping: 18, stiffness: 220, useNativeDriver: true }).start();
+      },
+      onPanResponderTerminate: () => Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start(),
+    }),
+    [onClose, translateY],
+  );
   if (!leg) return null;
   const transport = transportDetails(leg.mode);
   const color = legColor(leg.mode, colors.primary);
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible transparent animationType="none" onRequestClose={dismiss}>
       <View style={styles.legDetailsOverlay}>
-        <Pressable style={styles.legDetailsDismiss} onPress={onClose} />
+        <Pressable style={styles.legDetailsDismiss} onPress={dismiss} />
+        <Animated.View style={{ transform: [{ translateY }] }}>
         <SafeAreaView edges={["left", "right", "bottom"]} style={[styles.legDetailsSheet, { backgroundColor: colors.card }]}>
-          <View style={styles.legDetailsHandle} />
+          <View style={styles.legDetailsDragZone} {...panResponder.panHandlers}>
+            <View style={styles.legDetailsHandle} />
+            <Text style={[styles.legDetailsDragHint, { color: colors.muted }]}>Swipe down to return</Text>
+          </View>
           <View style={styles.legDetailsHeader}>
+            <Pressable accessibilityLabel="Back to transport list" onPress={dismiss} style={[styles.legDetailsBack, { backgroundColor: colors.surface }]}>
+              <Ionicons name="arrow-back" size={22} color={colors.text} />
+            </Pressable>
             <View style={[styles.legDetailsIcon, { backgroundColor: color }]}>
               <MaterialCommunityIcons name={transport.icon} size={24} color="#fff" />
             </View>
@@ -329,9 +360,6 @@ function RouteLegDetailsSheet({
               <Text style={[styles.legDetailsTitle, { color: colors.text }]}>{transport.label}</Text>
               <Text style={[styles.legDetailsSummary, { color: colors.muted }]}>{leg.duration} · {leg.distance}</Text>
             </View>
-            <Pressable accessibilityLabel="Close route details" onPress={onClose} style={[styles.legDetailsClose, { backgroundColor: colors.surface }]}>
-              <Ionicons name="close" size={23} color={colors.text} />
-            </Pressable>
           </View>
           <View style={[styles.legModeTabs, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             {TRANSPORT_OPTIONS.filter((option): option is typeof option & { id: RouteLegMode } => option.id !== "smart").map((option) => {
@@ -424,6 +452,7 @@ function RouteLegDetailsSheet({
             })}
           </ScrollView>
         </SafeAreaView>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -2473,21 +2502,7 @@ function AppContent() {
                 </View>
               </View>
               <View style={styles.plannerProgress}>
-                <View style={styles.plannerProgressTrack}>
-                  {plannerSteps.map((step, index) => (
-                    <View
-                      key={step}
-                      style={[
-                        styles.plannerProgressSegment,
-                        {
-                          backgroundColor:
-                            index <= plannerMaxStep ? colors.primary : colors.border,
-                        },
-                      ]}
-                    />
-                  ))}
-                </View>
-                <View style={styles.plannerProgressLabels}>
+                <View style={styles.plannerProgressTargets}>
                   {plannerSteps.map((step, index) => (
                     <Pressable
                       key={step}
@@ -2499,8 +2514,9 @@ function AppContent() {
                       }}
                       disabled={index > plannerMaxStep || index === plannerStep}
                       onPress={() => setPlannerStep(index)}
-                      style={styles.plannerProgressLabelButton}
+                      style={styles.plannerProgressTarget}
                     >
+                      <View style={[styles.plannerProgressSegment, { backgroundColor: index <= plannerMaxStep ? colors.primary : colors.border }]} />
                       <Text
                         style={[
                           styles.plannerProgressLabel,
@@ -3480,15 +3496,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 9,
   },
+  legDetailsDragZone: { minHeight: 46, alignItems: "center", justifyContent: "center" },
   legDetailsHandle: {
     width: 48,
     height: 5,
     borderRadius: 3,
     backgroundColor: "#cbd5e1",
     alignSelf: "center",
-    marginBottom: 14,
+    marginBottom: 2,
   },
+  legDetailsDragHint: { fontSize: 10, fontWeight: "600", marginTop: 3 },
   legDetailsHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
+  legDetailsBack: { width: 40, height: 40, borderRadius: 13, alignItems: "center", justifyContent: "center" },
   legDetailsIcon: {
     width: 46,
     height: 46,
@@ -3499,13 +3518,6 @@ const styles = StyleSheet.create({
   legDetailsEyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 1.4 },
   legDetailsTitle: { fontSize: 21, fontWeight: "800" },
   legDetailsSummary: { fontSize: 13, marginTop: 1 },
-  legDetailsClose: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   legModeTabs: {
     marginTop: 15,
     borderWidth: 1,
@@ -3612,11 +3624,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 10,
   },
-  plannerProgressTrack: { flexDirection: "row", gap: 5 },
-  plannerProgressSegment: { flex: 1, height: 4, borderRadius: 999 },
-  plannerProgressLabels: { flexDirection: "row", marginTop: 5 },
-  plannerProgressLabelButton: { flex: 1, alignItems: "center", paddingVertical: 2 },
-  plannerProgressLabel: { fontSize: 9.5, fontWeight: "600" },
+  plannerProgressTargets: { flexDirection: "row", gap: 5 },
+  plannerProgressTarget: { flex: 1, minHeight: 40, justifyContent: "flex-start", alignItems: "center", paddingVertical: 6 },
+  plannerProgressSegment: { width: "100%", height: 4, borderRadius: 999 },
+  plannerProgressLabel: { fontSize: 9.5, fontWeight: "600", marginTop: 5 },
   plannerProgressLabelActive: { fontWeight: "800" },
   plannerStickyAction: {
     borderTopWidth: StyleSheet.hairlineWidth,
