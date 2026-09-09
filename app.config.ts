@@ -10,7 +10,7 @@ const iosMapsKey = production
 
 export default {
   expo: {
-    name: development ? "Tipsy Tourist Dev" : "Tipsy Tourist",
+    name: development ? "Trippa Dev" : "Trippa",
     owner: "iainhoolahan",
     slug: "tipsy-tourist-mobile",
     scheme: development ? "tipsytourist-dev" : "tipsytourist",
@@ -32,7 +32,7 @@ export default {
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         NSLocationWhenInUseUsageDescription:
-          "Tipsy Tourist uses your location to start and centre local itineraries, for example a landmarks tour.",
+          "Trippa uses your location to start and centre local itineraries, for example a landmarks tour.",
       },
     },
     android: {
@@ -47,7 +47,6 @@ export default {
         backgroundColor: "#fffaf1",
         backgroundImage: "./assets/android-icon-map-background.png",
         foregroundImage: "./assets/android-icon-foreground-safe.png",
-        monochromeImage: "./assets/android-icon-monochrome.png",
       },
       permissions: ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"],
     },
@@ -57,7 +56,7 @@ export default {
         "expo-location",
         {
           locationWhenInUsePermission:
-            "Tipsy Tourist uses your location to start and centre local itineraries, for example a landmarks tour.",
+            "Trippa uses your location to start and centre local itineraries, for example a landmarks tour.",
         },
       ],
     ],

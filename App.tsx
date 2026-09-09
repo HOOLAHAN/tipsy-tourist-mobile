@@ -106,7 +106,7 @@ function RainbowTitle() {
   const colors = ["#ea4335", "#fbbc05", "#4285f4", "#34a853"];
   return (
     <Text style={styles.brandTitle}>
-      {"Tipsy Tourist".split("").map((letter, index) => (
+      {"Trippa".split("").map((letter, index) => (
         <Text
           key={index}
           style={{
@@ -1240,7 +1240,7 @@ const ShareCard = forwardRef<
     <View ref={ref} collapsable={false} style={styles.shareCard}>
       <View style={styles.shareBrandRow}>
         <Image
-          source={require("./assets/tipsy-logo.png")}
+          source={require("./assets/trippa-logo.png")}
           style={styles.shareLogo}
           resizeMode="contain"
         />
@@ -1335,7 +1335,7 @@ const ShareCard = forwardRef<
           </Text>
         </View>
       </View>
-      <Text style={styles.shareFooter}>Planned with Tipsy Tourist</Text>
+      <Text style={styles.shareFooter}>Planned with Trippa</Text>
     </View>
   );
 });
@@ -2216,7 +2216,7 @@ function AppContent() {
               <View style={styles.headerRow}>
                 <View style={styles.logoBox}>
                   <Image
-                    source={require("./assets/tipsy-logo.png")}
+                    source={require("./assets/trippa-logo.png")}
                     style={styles.brandLogo}
                     resizeMode="contain"
                   />
@@ -2856,7 +2856,7 @@ function AppContent() {
                 >
                   <View style={styles.infoBrand}>
                     <Image
-                      source={require("./assets/tipsy-logo.png")}
+                      source={require("./assets/trippa-logo.png")}
                       style={styles.infoLogo}
                       resizeMode="contain"
                     />

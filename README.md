@@ -1,6 +1,6 @@
-# Tipsy Tourist Mobile
+# Trippa Mobile
 
-The native iOS and Android companion to Tipsy Tourist, built with React Native and Expo.
+The native iOS and Android Trippa app, built with React Native and Expo.
 
 The project targets Expo SDK 54 so it runs in the current App Store and Play Store versions of Expo Go.
 
@@ -21,7 +21,7 @@ The project targets Expo SDK 54 so it runs in the current App Store and Play Sto
 3. Install dependencies with `npm install`.
 4. Start Expo with `npm start`, then open the app on a simulator or device.
 
-The app defaults to the deployed Tipsy Tourist Lambda API. Override `EXPO_PUBLIC_API_URL` locally when using another stage.
+The app defaults to the deployed Trippa route API. Override `EXPO_PUBLIC_API_URL` locally when using another stage.
 
 ## Google Maps keys
 
@@ -32,7 +32,7 @@ Native map rendering uses keys whose environment-variable names match Google Clo
 - `TIPSY_TOURIST_MOBILE_IOS_DEVELOPMENT`
 - `TIPSY_TOURIST_MOBILE_IOS_PRODUCTION`
 
-The iOS app currently displays Apple Maps, so the iOS Google keys are prepared but not required. Autocomplete, geocoding, place discovery, place details, place photos and directions are requested through the Tipsy Tourist Lambda API, keeping the server-services key out of the app binary.
+The iOS app currently displays Apple Maps, so the iOS Google keys are prepared but not required. Autocomplete, geocoding, place discovery, place details, place photos and directions are requested through the Trippa route API, keeping the server-services key out of the app binary.
 
 EAS selects development or production through `EXPO_PUBLIC_TIPSY_TOURIST_ENVIRONMENT`, which is configured per profile in `eas.json`.
 
