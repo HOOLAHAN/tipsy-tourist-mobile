@@ -64,6 +64,11 @@ function candidateScore(
     cafes: ["cafe"],
     food: ["restaurant"],
     shopping: ["store", "shopping_mall"],
+    family: ["zoo", "aquarium", "amusement_park"],
+    entertainment: ["movie_theater"],
+    scenic: ["tourist_attraction", "park"],
+    activities: ["bowling_alley", "gym"],
+    bars: ["bar"],
   };
   const specificity = place.types?.some((item) =>
     expectedTypes[category]?.includes(item),
@@ -90,7 +95,7 @@ function isQualityCandidate(
   return (
     !unsuitable &&
     rating >= 4 &&
-    reviews >= (["cafes", "food", "shopping"].includes(category) ? 20 : 10)
+    reviews >= (["cafes", "food", "shopping", "bars"].includes(category) ? 20 : 10)
   );
 }
 

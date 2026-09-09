@@ -8,7 +8,12 @@ export type StopCategory =
   | "cafes"
   | "food"
   | "shopping"
-  | "markets";
+  | "markets"
+  | "family"
+  | "entertainment"
+  | "scenic"
+  | "activities"
+  | "bars";
 
 export type CategoryQuantities = Record<StopCategory, number>;
 

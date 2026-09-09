@@ -86,6 +86,22 @@ function displayLocation(value: string) {
     : value;
 }
 
+const DEVICE_REGION = (() => {
+  try {
+    const locale = Intl.DateTimeFormat().resolvedOptions().locale;
+    return locale.split(/[-_]/)[1]?.toUpperCase() ?? "";
+  } catch {
+    return "";
+  }
+})();
+
+function localiseTransitText(value?: string) {
+  if (!value) return "";
+  if (DEVICE_REGION === "GB") return value.replace(/subway/gi, "Underground");
+  if (DEVICE_REGION === "US") return value.replace(/underground/gi, "subway");
+  return value;
+}
+
 function RainbowTitle() {
   const colors = ["#ea4335", "#fbbc05", "#4285f4", "#34a853"];
   return (
@@ -342,7 +358,9 @@ function RouteLegDetailsSheet({
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.legStepTitle, { color: colors.text }]}>
-                      {service ? `${step.vehicleName || "Transit"} ${service}` : step.instruction || stepTransport.label}
+                      {service
+                        ? `${localiseTransitText(step.vehicleName) || "Transit"} ${service}`
+                        : localiseTransitText(step.instruction) || stepTransport.label}
                     </Text>
                     {step.departureStop && (
                       <Text style={[styles.legStepInstruction, { color: colors.text }]}>Get on at {step.departureStop}{step.departureTime ? ` · ${step.departureTime}` : ""}</Text>
@@ -352,7 +370,7 @@ function RouteLegDetailsSheet({
                       <Text style={[styles.legStepInstruction, { color: colors.text }]}>Get off at {step.arrivalStop}{step.arrivalTime ? ` · ${step.arrivalTime}` : ""}</Text>
                     )}
                     {!step.departureStop && step.instruction ? (
-                      <Text style={[styles.legStepInstruction, { color: colors.text }]}>{step.instruction}</Text>
+                      <Text style={[styles.legStepInstruction, { color: colors.text }]}>{localiseTransitText(step.instruction)}</Text>
                     ) : null}
                     <Text style={[styles.legStepMeta, { color: colors.muted }]}>
                       {step.duration} · {step.distance}{step.stopCount ? ` · ${step.stopCount} stops` : ""}
@@ -1892,7 +1910,10 @@ function AppContent() {
   ][plannerStep];
   const selectedStopSummary = STOP_CATEGORIES
     .filter(({ id }) => categoryQuantities[id] > 0)
-    .map(({ id, label }) => `${categoryQuantities[id]} ${label.toLowerCase()}`)
+    .map(({ id, label, singular }) => {
+      const quantity = categoryQuantities[id];
+      return `${quantity} ${(quantity === 1 ? singular : label).toLowerCase()}`;
+    })
     .join(" · ");
   const shareItinerary = async () => {
     if (!route || !mapRef.current || sharing) return;
