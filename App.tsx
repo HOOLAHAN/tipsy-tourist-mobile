@@ -233,9 +233,9 @@ const TRANSPORT_OPTIONS: {
 }[] = [
   { id: "walking", label: "Walk", icon: "walk" },
   { id: "bicycling", label: "Cycle", icon: "bicycle" },
-  { id: "transit", label: "Public transport", icon: "train-bus" },
+  { id: "transit", label: "Public", icon: "train-bus" },
   { id: "driving", label: "Taxi", icon: "taxi" },
-  { id: "smart", label: "Smart mix", icon: "transit-connection-variant" },
+  { id: "smart", label: "Smart", icon: "transit-connection-variant" },
 ];
 
 const TRANSPORT_GUIDANCE: Record<TravelMode, string> = {
@@ -266,25 +266,30 @@ function TransportSelector({
   onChange: (mode: TravelMode) => void;
   colors: (typeof themes)[ThemeName];
 }) {
+  const renderOption = (option: (typeof TRANSPORT_OPTIONS)[number]) => {
+    const selected = option.id === value;
+    return (
+      <Pressable
+        key={option.id}
+        accessibilityRole="radio"
+        accessibilityState={{ selected }}
+        onPress={() => onChange(option.id)}
+        style={[styles.transportOption, selected && { backgroundColor: colors.primary }]}
+      >
+        <MaterialCommunityIcons name={option.icon} size={18} color={selected ? "#fff" : colors.muted} />
+        <Text style={[styles.transportOptionText, { color: selected ? "#fff" : colors.text }]} numberOfLines={1}>
+          {option.label}
+        </Text>
+      </Pressable>
+    );
+  };
+
   return (
     <View style={[styles.transportSelector, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      {TRANSPORT_OPTIONS.map((option) => {
-        const selected = option.id === value;
-        return (
-          <Pressable
-            key={option.id}
-            accessibilityRole="radio"
-            accessibilityState={{ selected }}
-            onPress={() => onChange(option.id)}
-            style={[styles.transportOption, selected && { backgroundColor: colors.primary }]}
-          >
-            <MaterialCommunityIcons name={option.icon} size={18} color={selected ? "#fff" : colors.muted} />
-            <Text style={[styles.transportOptionText, { color: selected ? "#fff" : colors.text }]} numberOfLines={1}>
-              {option.label}
-            </Text>
-          </Pressable>
-        );
-      })}
+      <View style={styles.transportOptionRow}>{TRANSPORT_OPTIONS.slice(0, 3).map(renderOption)}</View>
+      <View style={[styles.transportOptionRow, styles.transportOptionRowLower]}>
+        {TRANSPORT_OPTIONS.slice(3).map(renderOption)}
+      </View>
     </View>
   );
 }
@@ -3319,7 +3324,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 3,
     flexDirection: "row",
-    gap: 3,
+    gap: 2,
   },
   legModeTab: {
     flex: 1,
@@ -3328,9 +3333,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 5,
+    gap: 3,
+    paddingHorizontal: 2,
   },
-  legModeTabText: { fontSize: 11.5, fontWeight: "700" },
+  legModeTabText: { fontSize: 10.5, fontWeight: "700" },
   legModeHelp: { fontSize: 11.5, lineHeight: 16 },
   legModeHelpRow: { marginTop: 7, gap: 8 },
   refreshTransitButton: {
@@ -3903,21 +3909,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 16,
     padding: 4,
-    flexDirection: "row",
-    flexWrap: "wrap",
     gap: 4,
   },
+  transportOptionRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 4,
+  },
+  transportOptionRowLower: {
+    paddingHorizontal: "16.67%",
+  },
   transportOption: {
-    width: "49.3%",
+    flex: 1,
     minHeight: 38,
     borderRadius: 12,
-    paddingHorizontal: 10,
+    paddingHorizontal: 4,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 7,
+    gap: 5,
   },
-  transportOptionText: { fontSize: 12.5, fontWeight: "700" },
+  transportOptionText: { fontSize: 12, fontWeight: "700" },
   primaryButton: {
     minHeight: 50,
     borderRadius: 999,
