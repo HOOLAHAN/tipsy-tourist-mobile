@@ -534,7 +534,7 @@ function AutocompleteInput({
     return () => clearTimeout(timer);
   }, [value]);
   return (
-    <View style={styles.autocompleteWrap}>
+    <View style={[styles.autocompleteWrap, focused && styles.autocompleteWrapFocused]}>
       <View style={styles.locationRow}>
         <TextInput
           value={displayLocation(value)}
@@ -576,7 +576,7 @@ function AutocompleteInput({
           {suggestions.slice(0, 5).map((item) => (
             <Pressable
               key={item.place_id}
-              onPress={() => {
+              onPressIn={() => {
                 onChange(item.description);
                 setSuggestions([]);
                 setFocused(false);
@@ -4044,6 +4044,7 @@ const styles = StyleSheet.create({
   },
   plannerBody: { paddingTop: 18, gap: 11 },
   autocompleteWrap: { zIndex: 20 },
+  autocompleteWrapFocused: { zIndex: 100, elevation: 20 },
   locationRow: { flexDirection: "row", gap: 8 },
   locationInput: {
     flex: 1,

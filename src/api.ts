@@ -504,30 +504,43 @@ export async function planRoute(
     stopCategories.length,
     mode,
   );
-  onSearchCoverage?.({
-    path: [origin, destination],
-    points: points.map((point, index) => ({
-      ...point,
-      category: stopCategories[index],
-      radius: searchRadius,
-    })),
-  });
-  const stops: Place[] = [];
-  const selectedIds = new Set<string>();
-  const candidateGroups = await Promise.all(
-    stopCategories.map((category, index) =>
-      nearbyCandidates(points[index], category, searchRadius),
-    ),
-  );
-  // Select in journey order after fetching in parallel, rejecting duplicates between areas.
-  for (let index = 0; index < stopCategories.length; index += 1) {
-    const place = candidateGroups[index].find(
-      (candidate) => !selectedIds.has(candidate.place_id),
+  const maximumSearchRadius = mode === "walking" ? 5000 : 10000;
+  const searchRadii = [
+    searchRadius,
+    Math.min(maximumSearchRadius, Math.round(searchRadius * 1.75)),
+    maximumSearchRadius,
+  ].filter((radius, index, radii) => radii.indexOf(radius) === index);
+  let stops: Place[] = [];
+
+  // Start close to the route, then widen only when a complete, unique set of
+  // suitable places cannot be assembled. Candidate quality ranking is retained
+  // at every radius, so increasing coverage does not mean choosing poorer stops.
+  for (const radius of searchRadii) {
+    onSearchCoverage?.({
+      path: [origin, destination],
+      points: points.map((point, index) => ({
+        ...point,
+        category: stopCategories[index],
+        radius,
+      })),
+    });
+    const candidateGroups = await Promise.all(
+      stopCategories.map((category, index) =>
+        nearbyCandidates(points[index], category, radius),
+      ),
     );
-    if (place) {
-      stops.push(place);
-      selectedIds.add(place.place_id);
+    const selectedIds = new Set<string>();
+    stops = [];
+    for (let index = 0; index < stopCategories.length; index += 1) {
+      const place = candidateGroups[index].find(
+        (candidate) => !selectedIds.has(candidate.place_id),
+      );
+      if (place) {
+        stops.push(place);
+        selectedIds.add(place.place_id);
+      }
     }
+    if (stops.length === stopCategories.length) break;
   }
   if (stops.length === 0)
     throw new Error(
