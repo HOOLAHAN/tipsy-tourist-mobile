@@ -21,6 +21,7 @@ export const STOP_CATEGORIES: {
   { id: "scenic", label: "Scenic", singular: "Scenic place", icon: "binoculars", color: "#0d9488", background: "#ccfbf1" },
   { id: "activities", label: "Activities", singular: "Activity", icon: "run", color: "#ca8a04", background: "#fef9c3" },
   { id: "bars", label: "Bars & pubs", singular: "Bar or pub", icon: "glass-mug-variant", color: "#b45309", background: "#fef3c7" },
+  { id: "heritage", label: "History & heritage", singular: "Historic place", icon: "castle", color: "#9f1239", background: "#ffe4e6" },
 ];
 
 export const DEFAULT_CATEGORY_QUANTITIES: CategoryQuantities = {
@@ -37,6 +38,7 @@ export const DEFAULT_CATEGORY_QUANTITIES: CategoryQuantities = {
   scenic: 0,
   activities: 0,
   bars: 0,
+  heritage: 0,
 };
 
 export function categoryDetails(category: StopCategory) {

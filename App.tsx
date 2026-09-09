@@ -232,6 +232,7 @@ const TRANSPORT_OPTIONS: {
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
 }[] = [
   { id: "walking", label: "Walk", icon: "walk" },
+  { id: "bicycling", label: "Cycle", icon: "bicycle" },
   { id: "transit", label: "Public transport", icon: "train-bus" },
   { id: "driving", label: "Taxi", icon: "taxi" },
   { id: "smart", label: "Smart mix", icon: "transit-connection-variant" },
@@ -239,6 +240,7 @@ const TRANSPORT_OPTIONS: {
 
 const TRANSPORT_GUIDANCE: Record<TravelMode, string> = {
   walking: "Best for compact itineraries. Local tours are limited to a 5 km search radius.",
+  bicycling: "Good for covering more ground. Routes are cycling estimates, so check local access and road conditions.",
   transit: "Best for wider areas. Times and services can change, so refresh a transit leg before travelling.",
   driving: "Useful for longer gaps. Times are traffic estimates and do not include taxi availability or fares.",
   smart: "Recommended for wider tours: walk legs up to 1.6 km, then use public transport, with a taxi estimate as fallback.",
@@ -249,6 +251,7 @@ function transportDetails(mode: TravelMode) {
 }
 
 function legColor(mode: RouteLeg["mode"], fallback: string) {
+  if (mode === "bicycling") return "#0d9488";
   if (mode === "transit") return "#7c3aed";
   if (mode === "driving") return "#ea580c";
   return fallback;

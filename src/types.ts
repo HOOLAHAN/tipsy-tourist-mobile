@@ -13,7 +13,8 @@ export type StopCategory =
   | "entertainment"
   | "scenic"
   | "activities"
-  | "bars";
+  | "bars"
+  | "heritage";
 
 export type CategoryQuantities = Record<StopCategory, number>;
 
@@ -27,7 +28,7 @@ export type SearchCoverage = {
   points: SearchCoveragePoint[];
 };
 
-export type TravelMode = "walking" | "transit" | "driving" | "smart";
+export type TravelMode = "walking" | "bicycling" | "transit" | "driving" | "smart";
 export type RouteLegMode = Exclude<TravelMode, "smart">;
 
 export type Place = {

@@ -69,6 +69,7 @@ function candidateScore(
     scenic: ["tourist_attraction", "park"],
     activities: ["bowling_alley", "gym"],
     bars: ["bar"],
+    heritage: ["tourist_attraction"],
   };
   const specificity = place.types?.some((item) =>
     expectedTypes[category]?.includes(item),
@@ -398,7 +399,7 @@ export async function routeThroughStops(
         const transit = step.transit_details;
         const stepMode = (step.travel_mode ?? responses[legIndex].mode).toLowerCase();
         return {
-          mode: (["walking", "transit", "driving"].includes(stepMode)
+          mode: (["walking", "bicycling", "transit", "driving"].includes(stepMode)
             ? stepMode
             : responses[legIndex].mode) as RouteLegMode,
           instruction: plainText(step.html_instructions),
