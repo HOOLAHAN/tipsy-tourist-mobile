@@ -3767,7 +3767,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  brandLogo: { width: 41, height: 41 },
+  brandLogo: { width: 50, height: 50 },
   brandTitle: { fontSize: 23, fontWeight: "500", letterSpacing: -0.5 },
   taglineRow: {
     flexDirection: "row",
