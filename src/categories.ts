@@ -11,7 +11,7 @@ export const STOP_CATEGORIES: {
   { id: "landmarks", label: "Landmarks", singular: "Landmark", icon: "bank-outline", color: "#7c3aed", background: "#ede9fe" },
   { id: "museums", label: "Museums", singular: "Museum", icon: "pillar", color: "#9333ea", background: "#f3e8ff" },
   { id: "galleries", label: "Galleries", singular: "Gallery", icon: "palette-outline", color: "#db2777", background: "#fce7f3" },
-  { id: "parks", label: "Parks", singular: "Park", icon: "tree-outline", color: "#15803d", background: "#dcfce7" },
+  { id: "parks", label: "Parks & nature", singular: "Park or nature spot", icon: "tree-outline", color: "#15803d", background: "#dcfce7" },
   { id: "cafes", label: "Cafés", singular: "Café", icon: "coffee-outline", color: "#a16207", background: "#fef3c7" },
   { id: "food", label: "Food", singular: "Food", icon: "silverware-fork-knife", color: "#ea580c", background: "#ffedd5" },
   { id: "shopping", label: "Shopping", singular: "Shopping", icon: "shopping-outline", color: "#0369a1", background: "#e0f2fe" },

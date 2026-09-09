@@ -60,7 +60,7 @@ function candidateScore(
     landmarks: ["tourist_attraction"],
     museums: ["museum"],
     galleries: ["art_gallery"],
-    parks: ["park"],
+    parks: ["park", "natural_feature"],
     cafes: ["cafe"],
     food: ["restaurant"],
     shopping: ["store", "shopping_mall"],
@@ -441,6 +441,7 @@ export async function replaceRouteLeg(
   route: RoutePlan,
   index: number,
   mode: RouteLegMode,
+  departureTime = route.departureTime,
 ): Promise<RoutePlan> {
   const points = [
     route.origin,
@@ -458,7 +459,7 @@ export async function replaceRouteLeg(
     points[index + 1],
     [],
     mode,
-    route.departureTime,
+    departureTime,
   );
   const legs = [...route.legs];
   legs[index] = replacement.legs[0];

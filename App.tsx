@@ -237,6 +237,13 @@ const TRANSPORT_OPTIONS: {
   { id: "smart", label: "Smart mix", icon: "transit-connection-variant" },
 ];
 
+const TRANSPORT_GUIDANCE: Record<TravelMode, string> = {
+  walking: "Best for compact itineraries. Local tours are limited to a 5 km search radius.",
+  transit: "Best for wider areas. Times and services can change, so refresh a transit leg before travelling.",
+  driving: "Useful for longer gaps. Times are traffic estimates and do not include taxi availability or fares.",
+  smart: "Recommended for wider tours: walk legs up to 1.6 km, then use public transport, with a taxi estimate as fallback.",
+};
+
 function transportDetails(mode: TravelMode) {
   return TRANSPORT_OPTIONS.find((option) => option.id === mode) ?? TRANSPORT_OPTIONS[0];
 }
@@ -284,15 +291,18 @@ function RouteLegDetailsSheet({
   index,
   onClose,
   onModeChange,
+  onRefresh,
   colors,
 }: {
   leg: RouteLeg | null;
   index: number;
   onClose: () => void;
   onModeChange: (mode: RouteLegMode) => Promise<void>;
+  onRefresh: () => Promise<void>;
   colors: (typeof themes)[ThemeName];
 }) {
   const [switchingTo, setSwitchingTo] = useState<RouteLegMode | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   if (!leg) return null;
   const transport = transportDetails(leg.mode);
   const color = legColor(leg.mode, colors.primary);
@@ -345,7 +355,32 @@ function RouteLegDetailsSheet({
               );
             })}
           </View>
-          <Text style={[styles.legModeHelp, { color: colors.muted }]}>Choose another mode to recalculate only this part of your itinerary.</Text>
+          <View style={styles.legModeHelpRow}>
+            <Text style={[styles.legModeHelp, { color: colors.muted }]}>Choose another mode to recalculate only this part of your itinerary.</Text>
+            {leg.mode === "transit" && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Refresh live public transport information"
+                disabled={refreshing || switchingTo !== null}
+                onPress={async () => {
+                  setRefreshing(true);
+                  try {
+                    await onRefresh();
+                  } finally {
+                    setRefreshing(false);
+                  }
+                }}
+                style={[styles.refreshTransitButton, { borderColor: colors.border, backgroundColor: colors.surface }]}
+              >
+                {refreshing ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Ionicons name="refresh" size={16} color={colors.primary} />
+                )}
+                <Text style={[styles.refreshTransitText, { color: colors.primary }]}>Refresh times</Text>
+              </Pressable>
+            )}
+          </View>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.legStepList}>
             {leg.steps.map((step, stepIndex) => {
               const stepTransport = transportDetails(step.mode);
@@ -1690,6 +1725,24 @@ function AppContent() {
       );
     }
   };
+  const refreshRouteLeg = async () => {
+    if (!route || selectedRouteLegIndex === null) return;
+    try {
+      const updated = await replaceRouteLeg(
+        route,
+        selectedRouteLegIndex,
+        route.legs[selectedRouteLegIndex].mode,
+        Math.floor(Date.now() / 1000),
+      );
+      setRoute(updated);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      Alert.alert(
+        "Could not refresh this leg",
+        error instanceof Error ? error.message : "Please try again.",
+      );
+    }
+  };
   const toggleTheme = () =>
     setThemeName((current) => (current === "light" ? "dark" : "light"));
   const moveStop = async (index: number, amount: number) => {
@@ -2467,15 +2520,22 @@ function AppContent() {
                   <>
                 <View style={styles.transportHeading}>
                   <Text style={[styles.sectionLabel, { color: colors.muted }]}>GETTING AROUND</Text>
-                  <Text style={[styles.transportHelp, { color: colors.muted }]}>Smart mix walks shorter legs and uses transport for longer ones.</Text>
+                  <Text style={[styles.transportHelp, { color: colors.muted }]}>Choose the best balance of distance, convenience and flexibility.</Text>
                 </View>
-                <TransportSelector value={mode} onChange={setMode} colors={colors} />
-                {mode === "smart" && (
-                  <View style={[styles.smartMixNotice, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <MaterialCommunityIcons name="information-outline" size={18} color={colors.primary} />
-                    <Text style={[styles.smartMixNoticeText, { color: colors.muted }]}>Walk legs up to 1.6 km, then use public transport. If transit is unavailable, a car/taxi estimate may be used.</Text>
-                  </View>
-                )}
+                <TransportSelector
+                  value={mode}
+                  onChange={(nextMode) => {
+                    setMode(nextMode);
+                    if (plannerMode === "local" && nextMode === "smart") {
+                      setLocalRadius(5000);
+                    }
+                  }}
+                  colors={colors}
+                />
+                <View style={[styles.smartMixNotice, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <MaterialCommunityIcons name="information-outline" size={18} color={colors.primary} />
+                  <Text style={[styles.smartMixNoticeText, { color: colors.muted }]}>{TRANSPORT_GUIDANCE[mode]}</Text>
+                </View>
                 {(mode === "transit" || mode === "smart") && (
                   <View style={styles.departureSection}>
                     <Text style={[styles.compactFieldLabel, { color: colors.muted }]}>LEAVE</Text>
@@ -3182,6 +3242,7 @@ function AppContent() {
           index={selectedRouteLegIndex ?? 0}
           onClose={() => setSelectedRouteLegIndex(null)}
           onModeChange={changeRouteLegMode}
+          onRefresh={refreshRouteLeg}
           colors={colors}
         />
         {route && shareMapUri && (
@@ -3267,7 +3328,20 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   legModeTabText: { fontSize: 11.5, fontWeight: "700" },
-  legModeHelp: { fontSize: 11.5, lineHeight: 16, marginTop: 7 },
+  legModeHelp: { fontSize: 11.5, lineHeight: 16 },
+  legModeHelpRow: { marginTop: 7, gap: 8 },
+  refreshTransitButton: {
+    minHeight: 38,
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  refreshTransitText: { fontSize: 12, fontWeight: "800" },
   legStepList: { gap: 8, paddingTop: 16, paddingBottom: 20 },
   legStep: {
     borderWidth: 1,
