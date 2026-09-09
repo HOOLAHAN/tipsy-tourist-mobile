@@ -374,6 +374,8 @@ export async function routeThroughStops(
     return {
       distance: metricDistance(leg.distance.value),
       duration: minuteDuration(leg.duration.value),
+      distanceMetres: leg.distance.value,
+      durationSeconds: leg.duration.value,
       midpoint,
       mode: responses[legIndex].mode,
       coordinates,
@@ -416,6 +418,39 @@ export async function routeThroughStops(
         ? `${Math.floor(seconds / 3600)} hr ${Math.round((seconds % 3600) / 60)} min`
         : `${Math.round(seconds / 60)} min`,
     legs: routeLegs,
+  };
+}
+
+export async function replaceRouteLeg(
+  route: RoutePlan,
+  index: number,
+  mode: RouteLegMode,
+): Promise<RoutePlan> {
+  const points = [
+    route.origin,
+    ...route.stops.map((place) => ({
+      latitude: place.geometry.location.lat,
+      longitude: place.geometry.location.lng,
+    })),
+    route.destination,
+  ];
+  if (!points[index] || !points[index + 1]) {
+    throw new Error("That journey leg is no longer available.");
+  }
+  const replacement = await routeThroughStops(points[index], points[index + 1], [], mode);
+  const legs = [...route.legs];
+  legs[index] = replacement.legs[0];
+  const metres = legs.reduce((total, leg) => total + leg.distanceMetres, 0);
+  const seconds = legs.reduce((total, leg) => total + leg.durationSeconds, 0);
+  return {
+    ...route,
+    legs,
+    coordinates: legs.flatMap((leg) => leg.coordinates),
+    distance: metricDistance(metres),
+    duration:
+      seconds >= 3600
+        ? `${Math.floor(seconds / 3600)} hr ${Math.round((seconds % 3600) / 60)} min`
+        : `${Math.round(seconds / 60)} min`,
   };
 }
 

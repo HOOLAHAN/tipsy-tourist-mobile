@@ -81,6 +81,8 @@ export type RoutePlan = {
 export type RouteLeg = {
   distance: string;
   duration: string;
+  distanceMetres: number;
+  durationSeconds: number;
   midpoint: Coordinate;
   mode: RouteLegMode;
   coordinates: Coordinate[];

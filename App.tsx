@@ -45,6 +45,7 @@ import {
   findReplacementStop,
   planRoute,
   planLocalTour,
+  replaceRouteLeg,
   routeThroughStops,
 } from "./src/api";
 import { ThemeName, themes } from "./src/theme";
@@ -55,6 +56,7 @@ import {
   PlaceSuggestion,
   RoutePlan,
   RouteLeg,
+  RouteLegMode,
   SearchCoverage,
   StopCategory,
   TravelMode,
@@ -257,13 +259,16 @@ function RouteLegDetailsSheet({
   leg,
   index,
   onClose,
+  onModeChange,
   colors,
 }: {
   leg: RouteLeg | null;
   index: number;
   onClose: () => void;
+  onModeChange: (mode: RouteLegMode) => Promise<void>;
   colors: (typeof themes)[ThemeName];
 }) {
+  const [switchingTo, setSwitchingTo] = useState<RouteLegMode | null>(null);
   if (!leg) return null;
   const transport = transportDetails(leg.mode);
   const color = legColor(leg.mode, colors.primary);
@@ -286,6 +291,37 @@ function RouteLegDetailsSheet({
               <Ionicons name="close" size={23} color={colors.text} />
             </Pressable>
           </View>
+          <View style={[styles.legModeTabs, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            {TRANSPORT_OPTIONS.filter((option): option is typeof option & { id: RouteLegMode } => option.id !== "smart").map((option) => {
+              const selected = option.id === leg.mode;
+              const switching = switchingTo === option.id;
+              return (
+                <Pressable
+                  key={option.id}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected, disabled: switchingTo !== null }}
+                  disabled={switchingTo !== null || selected}
+                  onPress={async () => {
+                    setSwitchingTo(option.id);
+                    try {
+                      await onModeChange(option.id);
+                    } finally {
+                      setSwitchingTo(null);
+                    }
+                  }}
+                  style={[styles.legModeTab, selected && { backgroundColor: legColor(option.id, colors.primary) }]}
+                >
+                  {switching ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <MaterialCommunityIcons name={option.icon} size={17} color={selected ? "#fff" : colors.muted} />
+                  )}
+                  <Text style={[styles.legModeTabText, { color: selected ? "#fff" : colors.text }]}>{option.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={[styles.legModeHelp, { color: colors.muted }]}>Choose another mode to recalculate only this part of your itinerary.</Text>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.legStepList}>
             {leg.steps.map((step, stepIndex) => {
               const stepTransport = transportDetails(step.mode);
@@ -1554,6 +1590,18 @@ function AppContent() {
     setFinish("");
     openPlanner();
   };
+  const changeRouteLegMode = async (legMode: RouteLegMode) => {
+    if (!route || selectedRouteLegIndex === null) return;
+    try {
+      const updated = await replaceRouteLeg(route, selectedRouteLegIndex, legMode);
+      setRoute(updated);
+    } catch (error) {
+      Alert.alert(
+        "Route unavailable",
+        error instanceof Error ? error.message : "Try another transport mode.",
+      );
+    }
+  };
   const toggleTheme = () =>
     setThemeName((current) => (current === "light" ? "dark" : "light"));
   const moveStop = async (index: number, amount: number) => {
@@ -2782,6 +2830,7 @@ function AppContent() {
           leg={selectedRouteLegIndex === null ? null : route?.legs[selectedRouteLegIndex] ?? null}
           index={selectedRouteLegIndex ?? 0}
           onClose={() => setSelectedRouteLegIndex(null)}
+          onModeChange={changeRouteLegMode}
           colors={colors}
         />
         {route && shareMapUri && (
@@ -2849,6 +2898,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  legModeTabs: {
+    marginTop: 15,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 3,
+    flexDirection: "row",
+    gap: 3,
+  },
+  legModeTab: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: 11,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+  },
+  legModeTabText: { fontSize: 11.5, fontWeight: "700" },
+  legModeHelp: { fontSize: 11.5, lineHeight: 16, marginTop: 7 },
   legStepList: { gap: 8, paddingTop: 16, paddingBottom: 20 },
   legStep: {
     borderWidth: 1,
