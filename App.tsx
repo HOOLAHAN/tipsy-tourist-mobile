@@ -1273,10 +1273,12 @@ const ShareCard = forwardRef<
 function AppContent() {
   const safeAreaInsets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
+  const plannerScrollRef = useRef<ScrollView>(null);
   const shareCardRef = useRef<View>(null);
   const shareImageLoadedRef = useRef<(() => void) | null>(null);
   const [themeName, setThemeName] = useState<ThemeName>("light");
   const [plannerOpen, setPlannerOpen] = useState(false);
+  const [plannerStep, setPlannerStep] = useState(0);
   const [infoOpen, setInfoOpen] = useState(false);
   const [infoSection, setInfoSection] = useState<string | null>("safety");
   const [itineraryOpen, setItineraryOpen] = useState(false);
@@ -1323,6 +1325,9 @@ function AppContent() {
       setLocalRadius(localRadiusMaximum);
     }
   }, [localRadius, localRadiusMaximum]);
+  useEffect(() => {
+    plannerScrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [plannerStep]);
   const plannerClosingRef = useRef(false);
   const itineraryClosingRef = useRef(false);
   const infoClosingRef = useRef(false);
@@ -1332,6 +1337,7 @@ function AppContent() {
     plannerClosingRef.current = false;
     plannerTranslateY.stopAnimation();
     plannerTranslateY.setValue(0);
+    setPlannerStep(route ? 3 : 0);
     setPlannerOpen(true);
   };
   const dismissPlanner = () => {
@@ -1601,6 +1607,28 @@ function AppContent() {
       setLoading(false);
     }
   };
+  const advancePlanner = () => {
+    Keyboard.dismiss();
+    if (
+      plannerStep === 0 &&
+      (!start.trim() || (plannerMode === "journey" && !finish.trim()))
+    ) {
+      return Alert.alert(
+        plannerMode === "local" ? "Choose a location" : "Choose both locations",
+        plannerMode === "local"
+          ? "Choose the area where you want to take your local tour."
+          : "Choose both a start and finish location.",
+      );
+    }
+    if (plannerStep === 2 && selectedCategories.length < 1) {
+      return Alert.alert(
+        "Choose an interest",
+        "Select at least one kind of place for your itinerary.",
+      );
+    }
+    Haptics.selectionAsync();
+    setPlannerStep((current) => Math.min(3, current + 1));
+  };
   const clear = () => {
     setRoute(null);
     setSelectedRouteLegIndex(null);
@@ -1608,6 +1636,7 @@ function AppContent() {
     setStart("");
     setFinish("");
     openPlanner();
+    setPlannerStep(0);
   };
   const changeRouteLegMode = async (legMode: RouteLegMode) => {
     if (!route || selectedRouteLegIndex === null) return;
@@ -1817,6 +1846,32 @@ function AppContent() {
     );
   };
   const travelLabel = transportDetails(mode).label;
+  const plannerSteps = ["Route", "Transport", "Stops", "Review"];
+  const plannerStepCopy = [
+    {
+      title: plannerMode === "local" ? "Explore nearby" : "Where are we going?",
+      subtitle:
+        plannerMode === "local"
+          ? "Choose the area you want to explore."
+          : "Choose where your itinerary starts and finishes.",
+    },
+    {
+      title: "How will you travel?",
+      subtitle: "Choose how to get between your selected stops.",
+    },
+    {
+      title: "What interests you?",
+      subtitle: "Choose the types and number of stops to include.",
+    },
+    {
+      title: "Ready to explore?",
+      subtitle: "Check your choices before we build your itinerary.",
+    },
+  ][plannerStep];
+  const selectedStopSummary = STOP_CATEGORIES
+    .filter(({ id }) => categoryQuantities[id] > 0)
+    .map(({ id, label }) => `${categoryQuantities[id]} ${label.toLowerCase()}`)
+    .join(" · ");
   const shareItinerary = async () => {
     if (!route || !mapRef.current || sharing) return;
     setSharing(true);
@@ -2234,19 +2289,54 @@ function AppContent() {
                   <Text
                     style={[styles.sheetEyebrow, { color: colors.primary }]}
                   >
-                    BUILD A ROUTE
+                    STEP {plannerStep + 1} OF {plannerSteps.length}
                   </Text>
                   <Text style={[styles.sheetTitle, { color: colors.text }]}>
-                    {plannerMode === "local" ? "Explore nearby" : "Where are we going?"}
+                    {plannerStepCopy.title}
                   </Text>
                   <Text style={[styles.sheetSubtitle, { color: colors.muted }]}>
-                    {plannerMode === "local"
-                      ? "Pick an area and we’ll create a circular tour."
-                      : "Choose your route and we’ll find the stops."}
+                    {plannerStepCopy.subtitle}
                   </Text>
                 </View>
               </View>
+              <View style={styles.plannerProgress}>
+                <View style={styles.plannerProgressTrack}>
+                  {plannerSteps.map((step, index) => (
+                    <View
+                      key={step}
+                      style={[
+                        styles.plannerProgressSegment,
+                        {
+                          backgroundColor:
+                            index <= plannerStep ? colors.primary : colors.border,
+                        },
+                      ]}
+                    />
+                  ))}
+                </View>
+                <View style={styles.plannerProgressLabels}>
+                  {plannerSteps.map((step, index) => (
+                    <Pressable
+                      key={step}
+                      disabled={index >= plannerStep}
+                      onPress={() => setPlannerStep(index)}
+                      style={styles.plannerProgressLabelButton}
+                    >
+                      <Text
+                        style={[
+                          styles.plannerProgressLabel,
+                          { color: index === plannerStep ? colors.primary : colors.muted },
+                          index <= plannerStep && styles.plannerProgressLabelActive,
+                        ]}
+                      >
+                        {step}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
               <ScrollView
+                ref={plannerScrollRef}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={[
@@ -2258,6 +2348,8 @@ function AppContent() {
                   },
                 ]}
               >
+                {plannerStep === 0 && (
+                  <>
                 <View
                   style={[
                     styles.plannerModeSwitch,
@@ -2320,6 +2412,10 @@ function AppContent() {
                     </>
                   )}
                 </View>
+                  </>
+                )}
+                {plannerStep === 1 && (
+                  <>
                 <View style={styles.transportHeading}>
                   <Text style={[styles.sectionLabel, { color: colors.muted }]}>GETTING AROUND</Text>
                   <Text style={[styles.transportHelp, { color: colors.muted }]}>Smart mix walks shorter legs and uses transport for longer ones.</Text>
@@ -2431,6 +2527,10 @@ function AppContent() {
                     )}
                   </View>
                 )}
+                  </>
+                )}
+                {plannerStep === 2 && (
+                  <>
                 <View style={styles.stopCountHeading}>
                   <View>
                     <Text style={[styles.sectionLabel, { color: colors.muted }]}>CHOOSE YOUR STOPS</Text>
@@ -2444,7 +2544,76 @@ function AppContent() {
                   onChange={setCategoryQuantity}
                   colors={colors}
                 />
-                {route && (
+                  </>
+                )}
+                {plannerStep === 3 && (
+                  <View style={styles.plannerReviewList}>
+                    <View
+                      style={[
+                        styles.plannerReviewCard,
+                        { backgroundColor: colors.surface, borderColor: colors.border },
+                      ]}
+                    >
+                      <View style={styles.plannerReviewIcon}>
+                        <MaterialCommunityIcons name="map-marker-path" size={23} color={colors.primary} />
+                      </View>
+                      <View style={styles.plannerReviewCopy}>
+                        <Text style={[styles.plannerReviewLabel, { color: colors.muted }]}>ROUTE</Text>
+                        <Text numberOfLines={2} style={[styles.plannerReviewValue, { color: colors.text }]}>
+                          {plannerMode === "local" ? `Local tour from ${start}` : `${start} → ${finish}`}
+                        </Text>
+                      </View>
+                      <Pressable onPress={() => setPlannerStep(0)} style={styles.plannerReviewEdit}>
+                        <Text style={[styles.plannerReviewEditText, { color: colors.primary }]}>Edit</Text>
+                      </Pressable>
+                    </View>
+                    <View
+                      style={[
+                        styles.plannerReviewCard,
+                        { backgroundColor: colors.surface, borderColor: colors.border },
+                      ]}
+                    >
+                      <View style={styles.plannerReviewIcon}>
+                        <MaterialCommunityIcons name={transportDetails(mode).icon} size={23} color={colors.primary} />
+                      </View>
+                      <View style={styles.plannerReviewCopy}>
+                        <Text style={[styles.plannerReviewLabel, { color: colors.muted }]}>TRANSPORT</Text>
+                        <Text style={[styles.plannerReviewValue, { color: colors.text }]}>
+                          {travelLabel}
+                          {(mode === "transit" || mode === "smart") && departureOffsetMinutes > 0
+                            ? ` · Leave in ${departureOffsetMinutes} min`
+                            : ""}
+                          {plannerMode === "local"
+                            ? ` · ${localRadius >= 1000 ? `${localRadius / 1000} km` : `${localRadius} m`} radius`
+                            : ""}
+                        </Text>
+                      </View>
+                      <Pressable onPress={() => setPlannerStep(1)} style={styles.plannerReviewEdit}>
+                        <Text style={[styles.plannerReviewEditText, { color: colors.primary }]}>Edit</Text>
+                      </Pressable>
+                    </View>
+                    <View
+                      style={[
+                        styles.plannerReviewCard,
+                        { backgroundColor: colors.surface, borderColor: colors.border },
+                      ]}
+                    >
+                      <View style={styles.plannerReviewIcon}>
+                        <MaterialCommunityIcons name="map-search-outline" size={23} color={colors.primary} />
+                      </View>
+                      <View style={styles.plannerReviewCopy}>
+                        <Text style={[styles.plannerReviewLabel, { color: colors.muted }]}>STOPS · {stopCount}/10</Text>
+                        <Text numberOfLines={3} style={[styles.plannerReviewValue, { color: colors.text }]}>
+                          {selectedStopSummary || "No interests selected"}
+                        </Text>
+                      </View>
+                      <Pressable onPress={() => setPlannerStep(2)} style={styles.plannerReviewEdit}>
+                        <Text style={[styles.plannerReviewEditText, { color: colors.primary }]}>Edit</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                )}
+                {route && plannerStep === 3 && (
                   <Pressable onPress={clear} style={styles.sheetClear}>
                     <Ionicons
                       name="trash-outline"
@@ -2469,27 +2638,53 @@ function AppContent() {
                   },
                 ]}
               >
-                <Pressable
-                  disabled={loading}
-                  onPress={submit}
-                  style={[
-                    styles.primaryButton,
-                    { backgroundColor: colors.primary },
-                    loading && { opacity: 0.65 },
-                  ]}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <>
-                      <MaterialCommunityIcons name="map-marker-path" size={21} color="#fff" />
-                      <Text style={styles.primaryButtonText}>
-                        {route ? "Update my itinerary" : "Plan my itinerary"}
-                      </Text>
-                      <Ionicons name="arrow-forward" size={21} color="#fff" />
-                    </>
+                <View style={styles.plannerFooterButtons}>
+                  {plannerStep > 0 && (
+                    <Pressable
+                      disabled={loading}
+                      onPress={() => {
+                        Keyboard.dismiss();
+                        setPlannerStep((current) => Math.max(0, current - 1));
+                      }}
+                      style={[styles.plannerBackButton, { borderColor: colors.border }]}
+                    >
+                      <Ionicons name="arrow-back" size={19} color={colors.text} />
+                      <Text style={[styles.plannerBackButtonText, { color: colors.text }]}>Back</Text>
+                    </Pressable>
                   )}
-                </Pressable>
+                  <Pressable
+                    disabled={loading}
+                    onPress={plannerStep === 3 ? submit : advancePlanner}
+                    style={[
+                      styles.primaryButton,
+                      styles.plannerForwardButton,
+                      { backgroundColor: colors.primary },
+                      loading && { opacity: 0.65 },
+                    ]}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <>
+                        {plannerStep === 3 && (
+                          <MaterialCommunityIcons name="map-marker-path" size={21} color="#fff" />
+                        )}
+                        <Text style={styles.plannerForwardButtonText} numberOfLines={1}>
+                          {plannerStep === 0
+                            ? "Choose transport"
+                            : plannerStep === 1
+                              ? "Choose stops"
+                              : plannerStep === 2
+                                ? "Review"
+                                : route
+                                  ? "Update itinerary"
+                                  : "Plan itinerary"}
+                        </Text>
+                        <Ionicons name="arrow-forward" size={20} color="#fff" />
+                      </>
+                    )}
+                  </Pressable>
+                </View>
               </View>
             </Animated.View>
           </KeyboardAvoidingView>
@@ -3076,11 +3271,57 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === "ios" ? 24 : 18,
     gap: 8,
   },
+  plannerProgress: {
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+  plannerProgressTrack: { flexDirection: "row", gap: 5 },
+  plannerProgressSegment: { flex: 1, height: 4, borderRadius: 999 },
+  plannerProgressLabels: { flexDirection: "row", marginTop: 5 },
+  plannerProgressLabelButton: { flex: 1, alignItems: "center", paddingVertical: 2 },
+  plannerProgressLabel: { fontSize: 9.5, fontWeight: "600" },
+  plannerProgressLabelActive: { fontWeight: "800" },
   plannerStickyAction: {
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 16,
     paddingTop: 10,
   },
+  plannerFooterButtons: { flexDirection: "row", gap: 9 },
+  plannerBackButton: {
+    minHeight: 50,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderRadius: 999,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  plannerBackButtonText: { fontSize: 14, fontWeight: "700" },
+  plannerForwardButton: { flex: 1, paddingHorizontal: 12 },
+  plannerForwardButtonText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  plannerReviewList: { gap: 8 },
+  plannerReviewCard: {
+    minHeight: 72,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 11,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  plannerReviewIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  plannerReviewCopy: { flex: 1, gap: 2 },
+  plannerReviewLabel: { fontSize: 9.5, fontWeight: "800", letterSpacing: 1 },
+  plannerReviewValue: { fontSize: 13, lineHeight: 18, fontWeight: "600" },
+  plannerReviewEdit: { paddingHorizontal: 5, paddingVertical: 9 },
+  plannerReviewEditText: { fontSize: 12, fontWeight: "800" },
   plannerModeSwitch: {
     flexDirection: "row",
     borderWidth: 1,
