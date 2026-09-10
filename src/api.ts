@@ -641,6 +641,56 @@ export async function planRoute(
     stops = selectedStops.filter((place): place is Place => Boolean(place));
     if (stops.length === stopCategories.length) break;
   }
+
+  // A category's evenly distributed search point can occasionally be a poor
+  // proxy for a very short or irregular route. Before offering a partial plan,
+  // retry every unresolved category from the route midpoint at the full
+  // mode-specific radius. Results already selected by earlier, stricter passes
+  // remain locked in.
+  if (missingCategories.length) {
+    const midpoint = {
+      latitude: (origin.latitude + destination.latitude) / 2,
+      longitude: (origin.longitude + destination.longitude) / 2,
+    };
+    onSearchProgress?.({
+      attempt: searchAttempts.length,
+      total: searchAttempts.length,
+      increase: 100,
+      radius: maximumSearchRadius,
+      stage: "searching",
+      label: "Checking every remaining interest",
+    });
+    const unresolvedCategories = [...new Set(missingCategories)];
+    const recoveryResults = await Promise.allSettled(
+      unresolvedCategories.map((category) =>
+        nearbyCandidates(midpoint, category, maximumSearchRadius, 3),
+      ),
+    );
+    const recoveryCandidates = new Map<StopCategory, Place[]>(
+      unresolvedCategories.map((category, index) => [
+        category,
+        recoveryResults[index]?.status === "fulfilled"
+          ? recoveryResults[index].value
+          : [],
+      ]),
+    );
+    const selectedIds = new Set(
+      selectedStops
+        .filter((place): place is Place => Boolean(place))
+        .map((place) => place.place_id),
+    );
+    for (let index = 0; index < stopCategories.length; index += 1) {
+      if (selectedStops[index]) continue;
+      const place = (recoveryCandidates.get(stopCategories[index]) ?? []).find(
+        (candidate) => !selectedIds.has(candidate.place_id),
+      );
+      if (!place) continue;
+      selectedStops[index] = place;
+      selectedIds.add(place.place_id);
+    }
+    stops = selectedStops.filter((place): place is Place => Boolean(place));
+    missingCategories = stopCategories.filter((_, index) => !selectedStops[index]);
+  }
   if (stops.length === 0)
     throw new Error(
       "No suitable places were found along this route. Try different interests, locations or a longer route.",
