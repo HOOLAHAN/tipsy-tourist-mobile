@@ -1,6 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import Slider from "@react-native-community/slider";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Asset } from "expo-asset";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
 import * as Sharing from "expo-sharing";
@@ -75,6 +76,7 @@ const LONDON: Region = {
   longitudeDelta: 0.08,
 };
 const BLUE = "#4285f4";
+const TRIPPA_MAP_ICON = require("./assets/app-icon-map.png");
 const SUPPORT_BASE_URL =
   process.env.EXPO_PUBLIC_SUPPORT_URL ??
   "https://trippa.ijrhservices.co.uk";
@@ -338,7 +340,7 @@ function RoutePlanningExperience({ progress, colors }: { progress: PlanningProgr
       <View style={styles.planningOrbitWrap}>
         <Animated.View style={[styles.planningPulse, { backgroundColor: `${colors.primary}20`, transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.18] }) }], opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.8, 0.25] }) }]} />
         <View style={[styles.planningLogoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Image source={require("./assets/app-icon-map.png")} resizeMode="cover" style={styles.planningLogo} />
+          <Image source={TRIPPA_MAP_ICON} resizeMode="cover" style={styles.planningLogo} />
         </View>
         <Animated.View style={[styles.planningSearchPin, { backgroundColor: colors.primary, transform: [{ translateY: pulse.interpolate({ inputRange: [0, 1], outputRange: [2, -7] }) }] }]}>
           <Ionicons name="search" size={20} color="#fff" />
@@ -1566,6 +1568,9 @@ function AppContent() {
   const itineraryTranslateY = useRef(new Animated.Value(0)).current;
   const infoTranslateY = useRef(new Animated.Value(0)).current;
   useEffect(() => {
+    Asset.loadAsync(TRIPPA_MAP_ICON).catch(() => undefined);
+  }, []);
+  useEffect(() => {
     if (localRadius > localRadiusMaximum) {
       setLocalRadius(localRadiusMaximum);
     }
@@ -1585,6 +1590,18 @@ function AppContent() {
   const itineraryClosingRef = useRef(false);
   const infoClosingRef = useRef(false);
   const detailTranslateX = useRef(new Animated.Value(420)).current;
+
+  const keepLocationInputVisible = (y: number) => {
+    // iOS can perform another automatic adjustment while the keyboard and the
+    // newly inserted suggestions are animating. Reassert the input position
+    // through that short window so the top of the list remains visible.
+    [0, 120, 280].forEach((delay) => {
+      setTimeout(
+        () => plannerScrollRef.current?.scrollTo({ y, animated: delay === 0 }),
+        delay,
+      );
+    });
+  };
 
   const openPlanner = () => {
     plannerClosingRef.current = false;
@@ -2712,7 +2729,7 @@ function AppContent() {
                     onChange={setStart}
                     placeholder={plannerMode === "local" ? "Tour location" : "Start location"}
                     onLocate={() => locateMe("start")}
-                    onSuggestionsShown={() => plannerScrollRef.current?.scrollTo({ y: 120, animated: true })}
+                    onSuggestionsShown={() => keepLocationInputVisible(54)}
                     colors={colors}
                   />
                   {plannerMode === "journey" && (
@@ -2728,7 +2745,7 @@ function AppContent() {
                         onChange={setFinish}
                         placeholder="Finish location"
                         onLocate={() => locateMe("finish")}
-                        onSuggestionsShown={() => plannerScrollRef.current?.scrollTo({ y: 185, animated: true })}
+                        onSuggestionsShown={() => keepLocationInputVisible(112)}
                         colors={colors}
                       />
                     </>
@@ -3555,7 +3572,7 @@ function AppContent() {
             <SafeAreaView edges={["left", "right"]} style={styles.routeFailureSafe}>
               <View style={[styles.routeFailureCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={[styles.routeFailureBrand, { backgroundColor: `${colors.primary}14` }]}>
-                  <Image source={require("./assets/app-icon-map.png")} resizeMode="cover" style={styles.routeFailureLogo} />
+                  <Image source={TRIPPA_MAP_ICON} resizeMode="cover" style={styles.routeFailureLogo} />
                 </View>
                 <Text style={[styles.routeFailureTitle, { color: colors.text }]}>
                   {routeFailure?.partialRoute ? "Your itinerary is almost ready" : "Trippa couldn't build that itinerary"}
