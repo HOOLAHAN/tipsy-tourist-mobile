@@ -294,6 +294,59 @@ function TransportSelector({
   );
 }
 
+type PlanningProgress = {
+  attempt: number;
+  total: number;
+  increase: number;
+  radius: number;
+  stage: "searching" | "routing";
+  label?: string;
+};
+
+function RoutePlanningExperience({ progress, colors }: { progress: PlanningProgress; colors: (typeof themes)[ThemeName] }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 850, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 850, useNativeDriver: true }),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [pulse]);
+  const radius = progress.radius >= 1000 ? `${(progress.radius / 1000).toFixed(progress.radius % 1000 ? 1 : 0)} km` : `${progress.radius} m`;
+  const title = progress.label ?? (progress.stage === "routing" ? "Building your Trippa" : progress.increase === 0 ? "Searching near your route" : `Widening the search by ${progress.increase}%`);
+  const detail = progress.stage === "routing" ? "Connecting your places and calculating each journey leg." : `Looking for highly rated places within ${radius} of each search point.`;
+  return (
+    <View style={[styles.planningExperience, { backgroundColor: colors.card }]}>
+      <View style={styles.planningOrbitWrap}>
+        <Animated.View style={[styles.planningPulse, { backgroundColor: `${colors.primary}20`, transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.18] }) }], opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.8, 0.25] }) }]} />
+        <View style={[styles.planningLogoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Image source={require("./assets/trippa-logo.png")} resizeMode="contain" style={styles.planningLogo} />
+        </View>
+        <Animated.View style={[styles.planningSearchPin, { backgroundColor: colors.primary, transform: [{ translateY: pulse.interpolate({ inputRange: [0, 1], outputRange: [2, -7] }) }] }]}>
+          <Ionicons name="search" size={20} color="#fff" />
+        </Animated.View>
+      </View>
+      <Text style={[styles.planningTitle, { color: colors.text }]}>{title}</Text>
+      <Text style={[styles.planningDetail, { color: colors.muted }]}>{detail}</Text>
+      <View style={styles.planningProgressRow}>
+        {Array.from({ length: progress.total }, (_, index) => (
+          <View key={index} style={[styles.planningProgressBar, { backgroundColor: index < progress.attempt ? colors.primary : colors.border }]} />
+        ))}
+      </View>
+      <Text style={[styles.planningAttempt, { color: colors.primary }]}>
+        {progress.stage === "routing" ? "Finalising your itinerary…" : `Search ${progress.attempt} of ${progress.total}`}
+      </Text>
+      <View style={[styles.planningQualityPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Ionicons name="sparkles" size={17} color={colors.primary} />
+        <Text style={[styles.planningQualityText, { color: colors.text }]}>Prioritising relevant, highly rated places</Text>
+      </View>
+    </View>
+  );
+}
+
 function RouteLegDetailsSheet({
   leg,
   index,
@@ -1483,6 +1536,7 @@ function AppContent() {
   const [showSearchCoverage, setShowSearchCoverage] = useState(true);
   const [showRouteLegs, setShowRouteLegs] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [planningProgress, setPlanningProgress] = useState<PlanningProgress>({ attempt: 1, total: 4, increase: 0, radius: 0, stage: "searching" });
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [updatingStopId, setUpdatingStopId] = useState<string | null>(null);
@@ -1763,6 +1817,7 @@ function AppContent() {
       );
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSearchCoverage(null);
+    setPlanningProgress({ attempt: 1, total: 4, increase: 0, radius: 0, stage: "searching" });
     setLoading(true);
     try {
       const departureTime =
@@ -1777,6 +1832,7 @@ function AppContent() {
             mode,
             departureTime,
             setSearchCoverage,
+            setPlanningProgress,
           )
         : await planRoute(
             start,
@@ -1785,6 +1841,7 @@ function AppContent() {
             mode,
             departureTime,
             setSearchCoverage,
+            setPlanningProgress,
           );
       setRoute(next);
       setPlannerOpen(false);
@@ -2930,6 +2987,7 @@ function AppContent() {
                   </Pressable>
                 </View>
               </View>
+              {loading && <RoutePlanningExperience progress={planningProgress} colors={colors} />}
             </Animated.View>
           </KeyboardAvoidingView>
         </Modal>
@@ -3674,6 +3732,19 @@ const styles = StyleSheet.create({
   plannerBackButtonText: { fontSize: 14, fontWeight: "700" },
   plannerForwardButton: { flex: 1, paddingHorizontal: 12 },
   plannerForwardButtonText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  planningExperience: { ...StyleSheet.absoluteFillObject, zIndex: 100, alignItems: "center", justifyContent: "center", paddingHorizontal: 28, paddingBottom: 12 },
+  planningOrbitWrap: { width: 150, height: 150, alignItems: "center", justifyContent: "center", marginBottom: 22 },
+  planningPulse: { position: "absolute", width: 132, height: 132, borderRadius: 66 },
+  planningLogoCard: { width: 108, height: 108, borderRadius: 32, borderWidth: 1, alignItems: "center", justifyContent: "center", shadowColor: "#4285f4", shadowOpacity: 0.22, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
+  planningLogo: { width: 92, height: 92 },
+  planningSearchPin: { position: "absolute", right: 3, top: 10, width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", borderWidth: 3, borderColor: "#fff" },
+  planningTitle: { fontSize: 25, fontWeight: "900", textAlign: "center", letterSpacing: -0.5 },
+  planningDetail: { fontSize: 14, lineHeight: 20, textAlign: "center", marginTop: 8, maxWidth: 340 },
+  planningProgressRow: { flexDirection: "row", gap: 7, width: "100%", maxWidth: 330, marginTop: 24 },
+  planningProgressBar: { flex: 1, height: 6, borderRadius: 999 },
+  planningAttempt: { fontSize: 12, fontWeight: "800", marginTop: 9, letterSpacing: 0.4 },
+  planningQualityPill: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 7, marginTop: 22 },
+  planningQualityText: { fontSize: 12, fontWeight: "700" },
   plannerReviewList: { gap: 8 },
   plannerReviewCard: {
     minHeight: 72,

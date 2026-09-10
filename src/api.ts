@@ -254,7 +254,7 @@ function adaptiveSearchRadius(
   return Math.round(
     Math.min(
       transportEnabled ? 7500 : 3000,
-      Math.max(transportEnabled ? 750 : 400, overlappingRadius),
+      Math.max(transportEnabled ? 1000 : 750, overlappingRadius),
     ),
   );
 }
@@ -511,6 +511,7 @@ export async function planRoute(
   mode: TravelMode,
   departureTime?: number,
   onSearchCoverage?: (coverage: SearchCoverage) => void,
+  onSearchProgress?: (progress: { attempt: number; total: number; increase: number; radius: number; stage: "searching" | "routing"; label?: string }) => void,
 ): Promise<RoutePlan> {
   const [origin, destination] = await Promise.all([
     geocode(startText),
@@ -530,18 +531,36 @@ export async function planRoute(
     stopCategories.length,
     mode,
   );
-  const maximumSearchRadius = mode === "walking" ? 5000 : 10000;
-  const searchRadii = [
-    searchRadius,
-    Math.min(maximumSearchRadius, Math.round(searchRadius * 1.75)),
-    maximumSearchRadius,
-  ].filter((radius, index, radii) => radii.indexOf(radius) === index);
+  const maximumSearchRadius = mode === "walking" ? 5000 : 15000;
+  const minimumStageRadii = mode === "walking"
+    ? [750, 1500, 2500, 5000]
+    : [1000, 2500, 5000, 10000];
+  const searchAttempts = [0, 25, 50, 100]
+    .map((increase, index) => {
+      const radius = Math.min(
+        maximumSearchRadius,
+        Math.max(
+          minimumStageRadii[index],
+          Math.round(searchRadius * (1 + increase / 100)),
+        ),
+      );
+      return {
+        increase,
+        radius,
+        label: index === 0
+          ? "Searching close to your route"
+          : `Expanding search to ${radius >= 1000 ? `${Number((radius / 1000).toFixed(1))} km` : `${radius} m`}`,
+      };
+    })
+    .filter((attempt, index, attempts) => attempts.findIndex(({ radius }) => radius === attempt.radius) === index);
   let stops: Place[] = [];
 
   // Start close to the route, then widen only when a complete, unique set of
   // suitable places cannot be assembled. Candidate quality ranking is retained
   // at every radius, so increasing coverage does not mean choosing poorer stops.
-  for (const radius of searchRadii) {
+  for (let attemptIndex = 0; attemptIndex < searchAttempts.length; attemptIndex += 1) {
+    const { radius, increase, label } = searchAttempts[attemptIndex];
+    onSearchProgress?.({ attempt: attemptIndex + 1, total: searchAttempts.length, increase, radius, stage: "searching", label });
     onSearchCoverage?.({
       path: [origin, destination],
       points: points.map((point, index) => ({
@@ -577,6 +596,8 @@ export async function planRoute(
       "We couldn't find enough suitable places along this route. Try fewer stops, different interests or nearby locations.",
     );
   }
+  const finalAttempt = searchAttempts[searchAttempts.length - 1];
+  onSearchProgress?.({ attempt: searchAttempts.length, total: searchAttempts.length, increase: finalAttempt.increase, radius: finalAttempt.radius, stage: "routing", label: "Building your Trippa" });
   return routeThroughStops(origin, destination, stops, mode, departureTime);
 }
 
@@ -587,11 +608,13 @@ export async function planLocalTour(
   mode: TravelMode,
   departureTime?: number,
   onSearchCoverage?: (coverage: SearchCoverage) => void,
+  onSearchProgress?: (progress: { attempt: number; total: number; increase: number; radius: number; stage: "searching" | "routing"; label?: string }) => void,
 ): Promise<RoutePlan> {
   const centre = await geocode(locationText);
   const maximumRadius = mode === "walking" ? 5000 : 15000;
   const searchRadius = Math.round(Math.min(maximumRadius, Math.max(500, radius)));
   const stopCategories = distributedCategories(quantities);
+  onSearchProgress?.({ attempt: 1, total: 1, increase: 0, radius: searchRadius, stage: "searching" });
   const categories = [...new Set(stopCategories)];
   onSearchCoverage?.({
     path: [centre, centre],
@@ -643,6 +666,7 @@ export async function planLocalTour(
     );
     return aAngle - bAngle;
   });
+  onSearchProgress?.({ attempt: 1, total: 1, increase: 0, radius: searchRadius, stage: "routing" });
   return routeThroughStops(centre, centre, orderedStops, mode, departureTime);
 }
 
