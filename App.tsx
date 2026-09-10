@@ -45,6 +45,7 @@ import {
   findReplacementStop,
   planRoute,
   planLocalTour,
+  PartialRouteError,
   replaceRouteLeg,
   routeThroughStops,
 } from "./src/api";
@@ -84,6 +85,20 @@ function displayLocation(value: string) {
   return COORDINATE_LOCATION_PATTERN.test(value.trim())
     ? "Your current location"
     : value;
+}
+
+function missingStopSummary(categories: StopCategory[]) {
+  const counts = categories.reduce((totals, category) => {
+    totals.set(category, (totals.get(category) ?? 0) + 1);
+    return totals;
+  }, new Map<StopCategory, number>());
+  return [...counts.entries()]
+    .map(([category, count]) =>
+      count > 1
+        ? `${count} ${categoryDetails(category).label}`
+        : categoryDetails(category).singular,
+    )
+    .join(", ");
 }
 
 const DEVICE_REGION = (() => {
@@ -1505,7 +1520,11 @@ function AppContent() {
   const [itineraryView, setItineraryView] = useState<"stops" | "transport">("stops");
   const [addStopPickerOpen, setAddStopPickerOpen] = useState(false);
   const [legDetailsFromItinerary, setLegDetailsFromItinerary] = useState(false);
-  const [routeFailure, setRouteFailure] = useState<string | null>(null);
+  const [routeFailure, setRouteFailure] = useState<{
+    message: string;
+    partialRoute?: RoutePlan;
+    missingCategories?: StopCategory[];
+  } | null>(null);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [detailsFromItinerary, setDetailsFromItinerary] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
@@ -1858,7 +1877,18 @@ function AppContent() {
       // iOS will not reliably present one native Modal over another. Dismiss the
       // planner first, then show the branded failure card.
       setPlannerOpen(false);
-      setTimeout(() => setRouteFailure(message), 160);
+      setTimeout(
+        () => setRouteFailure(
+          error instanceof PartialRouteError
+            ? {
+                message,
+                partialRoute: error.partialRoute,
+                missingCategories: error.missingCategories,
+              }
+            : { message },
+        ),
+        160,
+      );
     } finally {
       setLoading(false);
     }
@@ -1896,6 +1926,22 @@ function AppContent() {
       plannerTranslateY.setValue(0);
       setPlannerOpen(true);
     }, 120);
+  };
+  const acceptPartialRoute = () => {
+    const partialRoute = routeFailure?.partialRoute;
+    if (!partialRoute) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setRoute(partialRoute);
+    setRouteFailure(null);
+    setItineraryView("stops");
+    setTimeout(openItinerary, 120);
+    setTimeout(
+      () => mapRef.current?.fitToCoordinates(partialRoute.coordinates, {
+        edgePadding: { top: 170, right: 50, bottom: 130, left: 50 },
+        animated: true,
+      }),
+      220,
+    );
   };
   const clear = () => {
     setRoute(null);
@@ -3510,23 +3556,57 @@ function AppContent() {
                 <View style={[styles.routeFailureBrand, { backgroundColor: `${colors.primary}14` }]}>
                   <Image source={require("./assets/trippa-logo.png")} resizeMode="contain" style={styles.routeFailureLogo} />
                 </View>
-                <Text style={[styles.routeFailureTitle, { color: colors.text }]}>Trippa couldn't build that itinerary</Text>
-                <Text style={[styles.routeFailureText, { color: colors.muted }]}>
-                  {routeFailure?.toLowerCase().includes("viable")
-                    ? "Those choices don't currently make a practical route."
-                    : routeFailure}
+                <Text style={[styles.routeFailureTitle, { color: colors.text }]}>
+                  {routeFailure?.partialRoute ? "Your itinerary is almost ready" : "Trippa couldn't build that itinerary"}
                 </Text>
-                <View style={[styles.routeFailureHint, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <Ionicons name="sparkles-outline" size={20} color={colors.primary} />
-                  <Text style={[styles.routeFailureHintText, { color: colors.text }]}>Try fewer stops, a wider search area, or another transport mode.</Text>
+                <Text
+                  style={[styles.routeFailureText, { color: colors.muted }]}
+                >
+                  {routeFailure?.partialRoute
+                    ? `Trippa found ${routeFailure.partialRoute.stops.length} of your ${stopCount} requested stops.`
+                    : routeFailure?.message.toLowerCase().includes("viable")
+                    ? "Those choices don't currently make a practical route."
+                    : routeFailure?.message}
+                </Text>
+                <View
+                  style={[styles.routeFailureHint, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                >
+                  <Ionicons
+                    name={routeFailure?.partialRoute ? "information-circle-outline" : "sparkles-outline"}
+                    size={20}
+                    color={colors.primary}
+                  />
+                  <Text
+                    style={[styles.routeFailureHintText, { color: colors.text }]}
+                  >
+                    {routeFailure?.missingCategories?.length
+                      ? `Couldn't include: ${missingStopSummary(routeFailure.missingCategories)}.`
+                      : "Try fewer stops, a wider search area, or another transport mode."}
+                  </Text>
                 </View>
+                {routeFailure?.partialRoute && (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={acceptPartialRoute}
+                    style={({ pressed }) => [styles.routeFailureButton, { backgroundColor: colors.primary }, pressed && { opacity: 0.82 }]}
+                  >
+                    <Text style={styles.routeFailureButtonText}>Use this route</Text>
+                    <Ionicons name="arrow-forward" size={20} color="#fff" />
+                  </Pressable>
+                )}
                 <Pressable
                   accessibilityRole="button"
                   onPress={returnToPlannerAfterFailure}
-                  style={({ pressed }) => [styles.routeFailureButton, { backgroundColor: colors.primary }, pressed && { opacity: 0.82 }]}
+                  style={({ pressed }) => [
+                    routeFailure?.partialRoute ? styles.routeFailureSecondaryButton : styles.routeFailureButton,
+                    routeFailure?.partialRoute
+                      ? { borderColor: colors.border, backgroundColor: colors.surface }
+                      : { backgroundColor: colors.primary },
+                    pressed && { opacity: 0.82 },
+                  ]}
                 >
-                  <Text style={styles.routeFailureButtonText}>Adjust my plan</Text>
-                  <Ionicons name="arrow-forward" size={20} color="#fff" />
+                  <Text style={routeFailure?.partialRoute ? [styles.routeFailureSecondaryButtonText, { color: colors.text }] : styles.routeFailureButtonText}>Adjust my plan</Text>
+                  {!routeFailure?.partialRoute && <Ionicons name="arrow-forward" size={20} color="#fff" />}
                 </Pressable>
               </View>
             </SafeAreaView>
@@ -4540,6 +4620,8 @@ const styles = StyleSheet.create({
   routeFailureHintText: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: "600" },
   routeFailureButton: { width: "100%", minHeight: 52, borderRadius: 999, marginTop: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9 },
   routeFailureButtonText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+  routeFailureSecondaryButton: { width: "100%", minHeight: 50, borderWidth: 1, borderRadius: 999, marginTop: 10, alignItems: "center", justifyContent: "center" },
+  routeFailureSecondaryButtonText: { fontSize: 15, fontWeight: "800" },
   shareCaptureStage: {
     position: "absolute",
     left: -2000,

@@ -17,6 +17,16 @@ const API_URL =
   process.env.EXPO_PUBLIC_API_URL ??
   "https://t5jalxqqsb.execute-api.eu-west-2.amazonaws.com";
 
+export class PartialRouteError extends Error {
+  constructor(
+    public readonly partialRoute: RoutePlan,
+    public readonly missingCategories: StopCategory[],
+  ) {
+    super("A route was found, but a small number of the requested stops were unavailable.");
+    this.name = "PartialRouteError";
+  }
+}
+
 const DEVICE_COUNTRY = (() => {
   try {
     return Intl.DateTimeFormat().resolvedOptions().locale.split(/[-_]/)[1]?.toUpperCase() ?? "";
@@ -531,10 +541,16 @@ export async function planRoute(
     stopCategories.length,
     mode,
   );
-  const maximumSearchRadius = mode === "walking" ? 5000 : 15000;
+  const maximumSearchRadius = mode === "walking"
+    ? 5000
+    : mode === "bicycling"
+      ? 10000
+      : 15000;
   const minimumStageRadii = mode === "walking"
     ? [750, 1500, 2500, 5000]
-    : [1000, 2500, 5000, 10000];
+    : mode === "bicycling"
+      ? [1000, 2500, 5000, 10000]
+      : [1000, 3000, 7500, 15000];
   const searchAttempts = [0, 25, 50, 100]
     .map((increase, index) => {
       const radius = Math.min(
@@ -554,12 +570,15 @@ export async function planRoute(
     })
     .filter((attempt, index, attempts) => attempts.findIndex(({ radius }) => radius === attempt.radius) === index);
   let stops: Place[] = [];
+  let missingCategories: StopCategory[] = [];
+  let lastAttempt = searchAttempts[0];
 
   // Start close to the route, then widen only when a complete, unique set of
   // suitable places cannot be assembled. Candidate quality ranking is retained
   // at every radius, so increasing coverage does not mean choosing poorer stops.
   for (let attemptIndex = 0; attemptIndex < searchAttempts.length; attemptIndex += 1) {
     const { radius, increase, label } = searchAttempts[attemptIndex];
+    lastAttempt = searchAttempts[attemptIndex];
     onSearchProgress?.({ attempt: attemptIndex + 1, total: searchAttempts.length, increase, radius, stage: "searching", label });
     onSearchCoverage?.({
       path: [origin, destination],
@@ -569,13 +588,17 @@ export async function planRoute(
         radius,
       })),
     });
-    const candidateGroups = await Promise.all(
+    const candidateResults = await Promise.allSettled(
       stopCategories.map((category, index) =>
         nearbyCandidates(points[index], category, radius),
       ),
     );
+    const candidateGroups = candidateResults.map((result) =>
+      result.status === "fulfilled" ? result.value : [],
+    );
     const selectedIds = new Set<string>();
     stops = [];
+    missingCategories = [];
     for (let index = 0; index < stopCategories.length; index += 1) {
       const place = candidateGroups[index].find(
         (candidate) => !selectedIds.has(candidate.place_id),
@@ -583,6 +606,8 @@ export async function planRoute(
       if (place) {
         stops.push(place);
         selectedIds.add(place.place_id);
+      } else {
+        missingCategories.push(stopCategories[index]);
       }
     }
     if (stops.length === stopCategories.length) break;
@@ -592,12 +617,29 @@ export async function planRoute(
       "No suitable places were found along this route. Try different interests, locations or a longer route.",
     );
   if (stops.length !== stopCategories.length) {
+    if (missingCategories.length <= 2) {
+      onSearchProgress?.({
+        attempt: searchAttempts.length,
+        total: searchAttempts.length,
+        increase: lastAttempt.increase,
+        radius: lastAttempt.radius,
+        stage: "routing",
+        label: "Building the best available Trippa",
+      });
+      const partialRoute = await routeThroughStops(
+        origin,
+        destination,
+        stops,
+        mode,
+        departureTime,
+      );
+      throw new PartialRouteError(partialRoute, missingCategories);
+    }
     throw new Error(
       "We couldn't find enough suitable places along this route. Try fewer stops, different interests or nearby locations.",
     );
   }
-  const finalAttempt = searchAttempts[searchAttempts.length - 1];
-  onSearchProgress?.({ attempt: searchAttempts.length, total: searchAttempts.length, increase: finalAttempt.increase, radius: finalAttempt.radius, stage: "routing", label: "Building your Trippa" });
+  onSearchProgress?.({ attempt: searchAttempts.length, total: searchAttempts.length, increase: lastAttempt.increase, radius: lastAttempt.radius, stage: "routing", label: "Building your Trippa" });
   return routeThroughStops(origin, destination, stops, mode, departureTime);
 }
 
