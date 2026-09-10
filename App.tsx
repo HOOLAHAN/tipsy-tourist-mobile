@@ -2069,14 +2069,20 @@ function AppContent() {
     );
   };
   const clear = () => {
+    Keyboard.dismiss();
+    plannerClosingRef.current = false;
+    plannerTranslateY.stopAnimation();
+    plannerTranslateY.setValue(0);
     setRoute(null);
     setSelectedRouteLegIndex(null);
     setSearchCoverage(null);
     setStart("");
     setFinish("");
-    openPlanner();
     setPlannerStep(0);
     setPlannerMaxStep(0);
+    if (!plannerOpen) {
+      setPlannerOpen(true);
+    }
   };
   const changeRouteLegMode = async (legMode: RouteLegMode) => {
     if (!route || selectedRouteLegIndex === null) return;
