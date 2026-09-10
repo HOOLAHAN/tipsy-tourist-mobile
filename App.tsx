@@ -2657,6 +2657,7 @@ function AppContent() {
               <ScrollView
                 ref={plannerScrollRef}
                 keyboardShouldPersistTaps="always"
+                keyboardDismissMode="interactive"
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={[
                   styles.plannerContent,
@@ -2970,69 +2971,69 @@ function AppContent() {
                   </Pressable>
                 )}
               </ScrollView>
-              <View
-                style={[
-                  styles.plannerStickyAction,
-                  {
-                    backgroundColor: colors.card,
-                    borderTopColor: colors.border,
-                    paddingBottom:
-                      keyboardVisible
-                        ? 8
-                        : Platform.OS === "android"
+              {!keyboardVisible && (
+                <View
+                  style={[
+                    styles.plannerStickyAction,
+                    {
+                      backgroundColor: colors.card,
+                      borderTopColor: colors.border,
+                      paddingBottom:
+                        Platform.OS === "android"
                           ? 20 + Math.max(safeAreaInsets.bottom, 28)
                           : 24 + safeAreaInsets.bottom,
-                  },
-                ]}
-              >
-                <View style={styles.plannerFooterButtons}>
-                  {plannerStep > 0 && (
+                    },
+                  ]}
+                >
+                  <View style={styles.plannerFooterButtons}>
+                    {plannerStep > 0 && (
+                      <Pressable
+                        disabled={loading}
+                        onPress={() => {
+                          Keyboard.dismiss();
+                          setPlannerStep((current) => Math.max(0, current - 1));
+                        }}
+                        style={[styles.plannerBackButton, { borderColor: colors.border }]}
+                      >
+                        <Ionicons name="arrow-back" size={19} color={colors.text} />
+                        <Text style={[styles.plannerBackButtonText, { color: colors.text }]}>Back</Text>
+                      </Pressable>
+                    )}
                     <Pressable
                       disabled={loading}
-                      onPress={() => {
-                        Keyboard.dismiss();
-                        setPlannerStep((current) => Math.max(0, current - 1));
-                      }}
-                      style={[styles.plannerBackButton, { borderColor: colors.border }]}
+                      onPress={plannerStep === 3 ? submit : advancePlanner}
+                      style={[
+                        styles.primaryButton,
+                        styles.plannerForwardButton,
+                        { backgroundColor: colors.primary },
+                        loading && { opacity: 0.65 },
+                      ]}
                     >
-                      <Ionicons name="arrow-back" size={19} color={colors.text} />
-                      <Text style={[styles.plannerBackButtonText, { color: colors.text }]}>Back</Text>
+                      {loading ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <>
+                          {plannerStep === 3 && (
+                            <MaterialCommunityIcons name="map-marker-path" size={21} color="#fff" />
+                          )}
+                          <Text style={styles.plannerForwardButtonText} numberOfLines={1}>
+                            {plannerStep === 0
+                              ? "Choose transport"
+                              : plannerStep === 1
+                                ? "Choose stops"
+                                : plannerStep === 2
+                                  ? "Review"
+                                  : route
+                                    ? "Update itinerary"
+                                    : "Plan itinerary"}
+                          </Text>
+                          <Ionicons name="arrow-forward" size={20} color="#fff" />
+                        </>
+                      )}
                     </Pressable>
-                  )}
-                  <Pressable
-                    disabled={loading}
-                    onPress={plannerStep === 3 ? submit : advancePlanner}
-                    style={[
-                      styles.primaryButton,
-                      styles.plannerForwardButton,
-                      { backgroundColor: colors.primary },
-                      loading && { opacity: 0.65 },
-                    ]}
-                  >
-                    {loading ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <>
-                        {plannerStep === 3 && (
-                          <MaterialCommunityIcons name="map-marker-path" size={21} color="#fff" />
-                        )}
-                        <Text style={styles.plannerForwardButtonText} numberOfLines={1}>
-                          {plannerStep === 0
-                            ? "Choose transport"
-                            : plannerStep === 1
-                              ? "Choose stops"
-                              : plannerStep === 2
-                                ? "Review"
-                                : route
-                                  ? "Update itinerary"
-                                  : "Plan itinerary"}
-                        </Text>
-                        <Ionicons name="arrow-forward" size={20} color="#fff" />
-                      </>
-                    )}
-                  </Pressable>
+                  </View>
                 </View>
-              </View>
+              )}
               {loading && <RoutePlanningExperience progress={planningProgress} colors={colors} />}
             </Animated.View>
           </KeyboardAvoidingView>
