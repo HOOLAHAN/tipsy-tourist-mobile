@@ -338,7 +338,7 @@ function RoutePlanningExperience({ progress, colors }: { progress: PlanningProgr
       <View style={styles.planningOrbitWrap}>
         <Animated.View style={[styles.planningPulse, { backgroundColor: `${colors.primary}20`, transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.18] }) }], opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.8, 0.25] }) }]} />
         <View style={[styles.planningLogoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Image source={require("./assets/trippa-logo.png")} resizeMode="contain" style={styles.planningLogo} />
+          <Image source={require("./assets/app-icon-map.png")} resizeMode="cover" style={styles.planningLogo} />
         </View>
         <Animated.View style={[styles.planningSearchPin, { backgroundColor: colors.primary, transform: [{ translateY: pulse.interpolate({ inputRange: [0, 1], outputRange: [2, -7] }) }] }]}>
           <Ionicons name="search" size={20} color="#fff" />
@@ -3554,7 +3554,7 @@ function AppContent() {
             <SafeAreaView edges={["left", "right"]} style={styles.routeFailureSafe}>
               <View style={[styles.routeFailureCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={[styles.routeFailureBrand, { backgroundColor: `${colors.primary}14` }]}>
-                  <Image source={require("./assets/trippa-logo.png")} resizeMode="contain" style={styles.routeFailureLogo} />
+                  <Image source={require("./assets/app-icon-map.png")} resizeMode="cover" style={styles.routeFailureLogo} />
                 </View>
                 <Text style={[styles.routeFailureTitle, { color: colors.text }]}>
                   {routeFailure?.partialRoute ? "Your itinerary is almost ready" : "Trippa couldn't build that itinerary"}
@@ -3816,7 +3816,7 @@ const styles = StyleSheet.create({
   planningOrbitWrap: { width: 150, height: 150, alignItems: "center", justifyContent: "center", marginBottom: 22 },
   planningPulse: { position: "absolute", width: 132, height: 132, borderRadius: 66 },
   planningLogoCard: { width: 108, height: 108, borderRadius: 32, borderWidth: 1, alignItems: "center", justifyContent: "center", shadowColor: "#4285f4", shadowOpacity: 0.22, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
-  planningLogo: { width: 92, height: 92 },
+  planningLogo: { width: 92, height: 92, borderRadius: 24 },
   planningSearchPin: { position: "absolute", right: 3, top: 10, width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", borderWidth: 3, borderColor: "#fff" },
   planningTitle: { fontSize: 25, fontWeight: "900", textAlign: "center", letterSpacing: -0.5 },
   planningDetail: { fontSize: 14, lineHeight: 20, textAlign: "center", marginTop: 8, maxWidth: 340 },
@@ -4613,7 +4613,7 @@ const styles = StyleSheet.create({
   routeFailureSafe: { width: "100%", alignItems: "center" },
   routeFailureCard: { width: "100%", maxWidth: 430, borderWidth: 1, borderRadius: 28, padding: 22, alignItems: "center" },
   routeFailureBrand: { width: 76, height: 76, borderRadius: 24, alignItems: "center", justifyContent: "center", marginBottom: 14 },
-  routeFailureLogo: { width: 62, height: 62 },
+  routeFailureLogo: { width: 62, height: 62, borderRadius: 17 },
   routeFailureTitle: { textAlign: "center", fontSize: 22, fontWeight: "900", letterSpacing: -0.4 },
   routeFailureText: { textAlign: "center", fontSize: 15, lineHeight: 21, marginTop: 8 },
   routeFailureHint: { width: "100%", borderWidth: 1, borderRadius: 16, padding: 13, marginTop: 18, flexDirection: "row", alignItems: "center", gap: 10 },
