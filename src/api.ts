@@ -131,6 +131,20 @@ function isUsableCandidate(place: Omit<Place, "category">) {
   );
 }
 
+function isEligibleCandidate(
+  place: Omit<Place, "category">,
+  category: StopCategory,
+) {
+  const unsuitable = (place.types ?? []).some((item) =>
+    ["lodging", "travel_agency", "real_estate_agency"].includes(item),
+  );
+  return (
+    isUsableCandidate(place) &&
+    !unsuitable &&
+    matchesHospitalityCategory(place, category)
+  );
+}
+
 function matchesHospitalityCategory(
   place: Omit<Place, "category">,
   category: StopCategory,
@@ -147,6 +161,7 @@ async function nearbyCandidates(
   point: Coordinate,
   category: StopCategory,
   radius?: number,
+  qualityTier: 0 | 1 | 2 | 3 = 3,
 ): Promise<Place[]> {
   const response = await post<{
     data: { results?: Omit<Place, "category">[] } | Omit<Place, "category">[];
@@ -155,15 +170,21 @@ async function nearbyCandidates(
     ? response.data
     : response.data?.results;
   const available = results ?? [];
-  const quality = available.filter((place) => isQualityCandidate(place, category));
-  // Prefer established, well-reviewed places, but retain a fallback in quieter areas.
-  return (
-    quality.length
-      ? quality
-      : available.filter(
-          (item) => isUsableCandidate(item) && matchesHospitalityCategory(item, category) && (item.rating ?? 0) >= 3.8,
-        )
-  )
+  const eligible = available.filter((place) =>
+    isEligibleCandidate(place, category),
+  );
+  const candidates = qualityTier === 0
+    ? eligible.filter((place) => isQualityCandidate(place, category))
+    : qualityTier === 1
+      ? eligible.filter((place) => (place.rating ?? 0) >= 3.8)
+      : qualityTier === 2
+        // Parks, beaches, monuments and other public places are commonly
+        // unrated even when they are excellent destinations.
+        ? eligible.filter((place) => !place.rating || place.rating >= 3.2)
+        : eligible;
+  // Every wider tier includes the stronger candidates, and scoring keeps them
+  // ahead of weaker fallbacks when there is an abundance of choice.
+  return candidates
     .sort(
       (a, b) => candidateScore(b, point, category) - candidateScore(a, point, category),
     )
@@ -563,12 +584,12 @@ export async function planRoute(
       return {
         increase,
         radius,
+        qualityTier: index as 0 | 1 | 2 | 3,
         label: index === 0
           ? "Searching close to your route"
-          : `Expanding search to ${radius >= 1000 ? `${Number((radius / 1000).toFixed(1))} km` : `${radius} m`}`,
+          : `${index >= 2 ? "Broadening suitable places" : "Expanding search"} · ${radius >= 1000 ? `${Number((radius / 1000).toFixed(1))} km` : `${radius} m`}`,
       };
-    })
-    .filter((attempt, index, attempts) => attempts.findIndex(({ radius }) => radius === attempt.radius) === index);
+    });
   let stops: Place[] = [];
   let missingCategories: StopCategory[] = [];
   let lastAttempt = searchAttempts[0];
@@ -577,7 +598,7 @@ export async function planRoute(
   // suitable places cannot be assembled. Candidate quality ranking is retained
   // at every radius, so increasing coverage does not mean choosing poorer stops.
   for (let attemptIndex = 0; attemptIndex < searchAttempts.length; attemptIndex += 1) {
-    const { radius, increase, label } = searchAttempts[attemptIndex];
+    const { radius, increase, label, qualityTier } = searchAttempts[attemptIndex];
     lastAttempt = searchAttempts[attemptIndex];
     onSearchProgress?.({ attempt: attemptIndex + 1, total: searchAttempts.length, increase, radius, stage: "searching", label });
     onSearchCoverage?.({
@@ -590,7 +611,7 @@ export async function planRoute(
     });
     const candidateResults = await Promise.allSettled(
       stopCategories.map((category, index) =>
-        nearbyCandidates(points[index], category, radius),
+        nearbyCandidates(points[index], category, radius, qualityTier),
       ),
     );
     const candidateGroups = candidateResults.map((result) =>
