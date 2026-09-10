@@ -591,6 +591,7 @@ export async function planRoute(
       };
     });
   let stops: Place[] = [];
+  const selectedStops: Array<Place | undefined> = Array(stopCategories.length);
   let missingCategories: StopCategory[] = [];
   let lastAttempt = searchAttempts[0];
 
@@ -611,26 +612,33 @@ export async function planRoute(
     });
     const candidateResults = await Promise.allSettled(
       stopCategories.map((category, index) =>
-        nearbyCandidates(points[index], category, radius, qualityTier),
+        selectedStops[index]
+          ? Promise.resolve([])
+          : nearbyCandidates(points[index], category, radius, qualityTier),
       ),
     );
     const candidateGroups = candidateResults.map((result) =>
       result.status === "fulfilled" ? result.value : [],
     );
-    const selectedIds = new Set<string>();
-    stops = [];
+    const selectedIds = new Set(
+      selectedStops
+        .filter((place): place is Place => Boolean(place))
+        .map((place) => place.place_id),
+    );
     missingCategories = [];
     for (let index = 0; index < stopCategories.length; index += 1) {
+      if (selectedStops[index]) continue;
       const place = candidateGroups[index].find(
         (candidate) => !selectedIds.has(candidate.place_id),
       );
       if (place) {
-        stops.push(place);
+        selectedStops[index] = place;
         selectedIds.add(place.place_id);
       } else {
         missingCategories.push(stopCategories[index]);
       }
     }
+    stops = selectedStops.filter((place): place is Place => Boolean(place));
     if (stops.length === stopCategories.length) break;
   }
   if (stops.length === 0)
