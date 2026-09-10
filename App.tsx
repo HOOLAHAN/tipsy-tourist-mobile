@@ -1306,11 +1306,6 @@ function ItineraryRow({
           >
             <Ionicons name="trash-outline" size={18} color="#e11d48" />
           </Pressable>
-          <MaterialCommunityIcons
-            name={dragging ? "drag-vertical" : "gesture-tap-hold"}
-            size={21}
-            color={dragging ? colors.primary : colors.muted}
-          />
         </View>
       </Pressable>
     </Animated.View>
@@ -1566,6 +1561,7 @@ function AppContent() {
   const colors = themes[themeName];
   const plannerTranslateY = useRef(new Animated.Value(0)).current;
   const itineraryTranslateY = useRef(new Animated.Value(0)).current;
+  const itineraryPageX = useRef(new Animated.Value(0)).current;
   const infoTranslateY = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Asset.loadAsync(TRIPPA_MAP_ICON).catch(() => undefined);
@@ -1657,6 +1653,7 @@ function AppContent() {
     itineraryClosingRef.current = false;
     itineraryTranslateY.stopAnimation();
     itineraryTranslateY.setValue(0);
+    itineraryPageX.setValue(0);
     setItineraryOpen(true);
   };
   const openItineraryLeg = (index: number) => {
@@ -1715,6 +1712,64 @@ function AppContent() {
           }).start(),
       }),
     [itineraryTranslateY],
+  );
+  const animateItineraryView = (nextView: "stops" | "transport") => {
+    if (nextView === itineraryView) {
+      Animated.spring(itineraryPageX, {
+        toValue: 0,
+        damping: 20,
+        stiffness: 240,
+        useNativeDriver: true,
+      }).start();
+      return;
+    }
+    const direction = nextView === "transport" ? -1 : 1;
+    itineraryPageX.stopAnimation();
+    Animated.timing(itineraryPageX, {
+      toValue: direction * 190,
+      duration: 145,
+      useNativeDriver: true,
+    }).start(() => {
+      setItineraryView(nextView);
+      itineraryPageX.setValue(direction * -190);
+      Animated.spring(itineraryPageX, {
+        toValue: 0,
+        damping: 19,
+        stiffness: 210,
+        mass: 0.8,
+        useNativeDriver: true,
+      }).start();
+    });
+  };
+  const itineraryViewPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponderCapture: (_, gesture) =>
+          !isReordering &&
+          Math.abs(gesture.dx) > 16 &&
+          Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.35,
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          !isReordering &&
+          Math.abs(gesture.dx) > 16 &&
+          Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.35,
+        onPanResponderMove: (_, gesture) =>
+          itineraryPageX.setValue(Math.max(-150, Math.min(150, gesture.dx * 0.72))),
+        onPanResponderRelease: (_, gesture) => {
+          const switchedLeft = gesture.dx < -55 || gesture.vx < -0.45;
+          const switchedRight = gesture.dx > 55 || gesture.vx > 0.45;
+          if (switchedLeft && itineraryView === "stops") {
+            Haptics.selectionAsync();
+            animateItineraryView("transport");
+          } else if (switchedRight && itineraryView === "transport") {
+            Haptics.selectionAsync();
+            animateItineraryView("stops");
+          } else {
+            animateItineraryView(itineraryView);
+          }
+        },
+        onPanResponderTerminate: () => animateItineraryView(itineraryView),
+      }),
+    [isReordering, itineraryPageX, itineraryView],
   );
 
   const openInfo = () => {
@@ -3482,7 +3537,7 @@ function AppContent() {
                             key={view}
                             accessibilityRole="tab"
                             accessibilityState={{ selected }}
-                            onPress={() => setItineraryView(view)}
+                            onPress={() => animateItineraryView(view)}
                             style={[styles.itineraryViewButton, selected && { backgroundColor: colors.primary }]}
                           >
                             <MaterialCommunityIcons name={icon} size={17} color={selected ? "#fff" : colors.muted} />
@@ -3491,13 +3546,40 @@ function AppContent() {
                         );
                       })}
                     </View>
-                    <ScrollView
-                      style={styles.timelineScroll}
-                      scrollEnabled={!isReordering}
-                      removeClippedSubviews={false}
-                      showsVerticalScrollIndicator={false}
-                      contentContainerStyle={styles.timeline}
+                    <View
+                      style={styles.itinerarySwipeArea}
+                      {...itineraryViewPanResponder.panHandlers}
                     >
+                      <Animated.View
+                        style={[
+                          styles.itinerarySwipePage,
+                          {
+                            opacity: itineraryPageX.interpolate({
+                              inputRange: [-190, 0, 190],
+                              outputRange: [0.28, 1, 0.28],
+                              extrapolate: "clamp",
+                            }),
+                            transform: [
+                              { perspective: 850 },
+                              {
+                                rotateY: itineraryPageX.interpolate({
+                                  inputRange: [-190, 0, 190],
+                                  outputRange: ["12deg", "0deg", "-12deg"],
+                                  extrapolate: "clamp",
+                                }),
+                              },
+                              { translateX: itineraryPageX },
+                            ],
+                          },
+                        ]}
+                      >
+                        <ScrollView
+                          style={styles.timelineScroll}
+                          scrollEnabled={!isReordering}
+                          removeClippedSubviews={false}
+                          showsVerticalScrollIndicator={false}
+                          contentContainerStyle={styles.timeline}
+                        >
                       {itineraryView === "stops" && route?.stops.map((place, index) => (
                         <ItineraryRow
                           key={place.place_id}
@@ -3555,7 +3637,9 @@ function AppContent() {
                           />
                         );
                       })}
-                    </ScrollView>
+                        </ScrollView>
+                      </Animated.View>
+                    </View>
                   </View>
                 )}
               </Animated.View>
@@ -4132,7 +4216,7 @@ const styles = StyleSheet.create({
   transportLegTitle: { fontSize: 15, fontWeight: "800", lineHeight: 19 },
   transportLegSummary: { fontSize: 12, marginTop: 3 },
   transportLegService: { fontSize: 11, fontWeight: "700", marginTop: 3 },
-  rowActions: { gap: 5 },
+  rowActions: { gap: 12, justifyContent: "center" },
   rowAction: {
     width: 30,
     height: 28,
@@ -4164,6 +4248,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 12,
   },
+  itinerarySwipeArea: { flex: 1, minHeight: 0 },
+  itinerarySwipePage: { flex: 1, minHeight: 0 },
   locationContent: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 28 },
   pinContainer: {
     width: 42,
