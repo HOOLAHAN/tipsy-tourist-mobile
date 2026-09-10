@@ -616,6 +616,7 @@ function AutocompleteInput({
   onChange,
   placeholder,
   onLocate,
+  onFocus,
   onSuggestionsShown,
   colors,
 }: {
@@ -623,6 +624,7 @@ function AutocompleteInput({
   onChange: (value: string) => void;
   placeholder: string;
   onLocate: () => void;
+  onFocus?: () => void;
   onSuggestionsShown?: () => void;
   colors: (typeof themes)[ThemeName];
 }) {
@@ -658,7 +660,10 @@ function AutocompleteInput({
             onChange(next);
             setFocused(true);
           }}
-          onFocus={() => setFocused(true)}
+          onFocus={() => {
+            setFocused(true);
+            requestAnimationFrame(() => onFocus?.());
+          }}
           onBlur={() => setTimeout(() => setFocused(false), 120)}
           placeholder={placeholder}
           placeholderTextColor={colors.muted}
@@ -1594,6 +1599,7 @@ function AppContent() {
   const [loading, setLoading] = useState(false);
   const [planningProgress, setPlanningProgress] = useState<PlanningProgress>({ attempt: 1, total: 4, increase: 0, radius: 0, stage: "searching" });
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [plannerKeyboardLayoutVersion, setPlannerKeyboardLayoutVersion] = useState(0);
   const [sharing, setSharing] = useState(false);
   const [updatingStopId, setUpdatingStopId] = useState<string | null>(null);
   const [capturingShareMap, setCapturingShareMap] = useState(false);
@@ -1616,7 +1622,13 @@ function AppContent() {
   }, [plannerStep]);
   useEffect(() => {
     const show = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow", () => setKeyboardVisible(true));
-    const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", () => setKeyboardVisible(false));
+    const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", () => {
+      setKeyboardVisible(false);
+      if (Platform.OS === "android") {
+        setPlannerKeyboardLayoutVersion((version) => version + 1);
+        requestAnimationFrame(() => plannerScrollRef.current?.scrollTo({ y: 0, animated: false }));
+      }
+    });
     return () => {
       show.remove();
       hide.remove();
@@ -2700,8 +2712,9 @@ function AppContent() {
           onRequestClose={dismissPlanner}
         >
           <KeyboardAvoidingView
+            key={`planner-keyboard-${plannerKeyboardLayoutVersion}`}
             style={styles.sheetOverlay}
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
           >
             <Pressable style={styles.sheetDismiss} onPress={dismissPlanner} />
             <Animated.View
@@ -2769,6 +2782,11 @@ function AppContent() {
               </View>
               <ScrollView
                 ref={plannerScrollRef}
+                style={
+                  Platform.OS === "android" && plannerStep === 0
+                    ? styles.plannerRouteScrollAndroid
+                    : undefined
+                }
                 keyboardShouldPersistTaps="always"
                 keyboardDismissMode="interactive"
                 showsVerticalScrollIndicator={false}
@@ -2776,8 +2794,7 @@ function AppContent() {
                   styles.plannerContent,
                   {
                     paddingBottom:
-                      (Platform.OS === "ios" ? 24 : 18) +
-                      (Platform.OS === "android" ? drawerBottomInset : 0),
+                      Platform.OS === "ios" ? 24 : 12,
                   },
                 ]}
               >
@@ -2825,6 +2842,7 @@ function AppContent() {
                     onChange={setStart}
                     placeholder={plannerMode === "local" ? "Tour location" : "Start location"}
                     onLocate={() => locateMe("start")}
+                    onFocus={() => keepLocationInputVisible(38)}
                     onSuggestionsShown={() => keepLocationInputVisible(54)}
                     colors={colors}
                   />
@@ -2841,6 +2859,7 @@ function AppContent() {
                         onChange={setFinish}
                         placeholder="Finish location"
                         onLocate={() => locateMe("finish")}
+                        onFocus={() => keepLocationInputVisible(96)}
                         onSuggestionsShown={() => keepLocationInputVisible(112)}
                         colors={colors}
                       />
@@ -3900,6 +3919,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderBottomWidth: 0,
     overflow: "hidden",
+  },
+  plannerRouteScrollAndroid: {
+    flexGrow: 0,
+    flexShrink: 1,
   },
   dragZone: {
     minHeight: 42,
