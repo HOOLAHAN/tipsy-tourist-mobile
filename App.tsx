@@ -379,6 +379,10 @@ function RouteLegDetailsSheet({
   onRefresh: () => Promise<void>;
   colors: (typeof themes)[ThemeName];
 }) {
+  const safeAreaInsets = useSafeAreaInsets();
+  const bottomInset = Platform.OS === "android"
+    ? Math.max(safeAreaInsets.bottom, 28)
+    : safeAreaInsets.bottom;
   const [switchingTo, setSwitchingTo] = useState<RouteLegMode | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const translateY = useRef(new Animated.Value(0)).current;
@@ -413,9 +417,19 @@ function RouteLegDetailsSheet({
       <View style={styles.legDetailsOverlay}>
         <Pressable style={styles.legDetailsDismiss} onPress={dismiss} />
         <Animated.View
-          style={[styles.legDetailsAnimatedSheet, { transform: [{ translateY }] }]}
+          style={[
+            styles.legDetailsAnimatedSheet,
+            Platform.OS === "android" && styles.legDetailsAnimatedSheetAndroid,
+            { transform: [{ translateY }] },
+          ]}
         >
-        <SafeAreaView edges={["left", "right", "bottom"]} style={[styles.legDetailsSheet, { backgroundColor: colors.card }]}>
+        <SafeAreaView
+          edges={["left", "right"]}
+          style={[
+            styles.legDetailsSheet,
+            { backgroundColor: colors.card, paddingBottom: bottomInset },
+          ]}
+        >
           <View style={styles.legDetailsDragZone} {...panResponder.panHandlers}>
             <View style={styles.legDetailsHandle} />
             <Text style={[styles.legDetailsDragHint, { color: colors.muted }]}>Swipe down to return</Text>
@@ -1503,6 +1517,9 @@ const ShareCard = forwardRef<
 
 function AppContent() {
   const safeAreaInsets = useSafeAreaInsets();
+  const drawerBottomInset = Platform.OS === "android"
+    ? Math.max(safeAreaInsets.bottom, 28)
+    : safeAreaInsets.bottom;
   const mapRef = useRef<MapView>(null);
   const plannerScrollRef = useRef<ScrollView>(null);
   const shareCardRef = useRef<View>(null);
@@ -2561,7 +2578,7 @@ function AppContent() {
               styles.actionDock,
               {
                 bottom:
-                  18 + (Platform.OS === "android" ? safeAreaInsets.bottom : 0),
+                  18 + (Platform.OS === "android" ? drawerBottomInset : 0),
                 backgroundColor: colors.card,
                 borderColor: colors.border,
                 shadowColor: colors.shadow,
@@ -2736,7 +2753,7 @@ function AppContent() {
                   {
                     paddingBottom:
                       (Platform.OS === "ios" ? 24 : 18) +
-                      (Platform.OS === "android" ? safeAreaInsets.bottom : 0),
+                      (Platform.OS === "android" ? drawerBottomInset : 0),
                   },
                 ]}
               >
@@ -3052,7 +3069,7 @@ function AppContent() {
                       borderTopColor: colors.border,
                       paddingBottom:
                         Platform.OS === "android"
-                          ? 20 + Math.max(safeAreaInsets.bottom, 28)
+                          ? 20 + drawerBottomInset
                           : 24 + safeAreaInsets.bottom,
                     },
                   ]}
@@ -3131,7 +3148,7 @@ function AppContent() {
                   {
                     backgroundColor: colors.card,
                     borderColor: colors.border,
-                    paddingBottom: safeAreaInsets.bottom,
+                    paddingBottom: drawerBottomInset,
                     transform: [{ translateY: infoTranslateY }],
                   },
                 ]}
@@ -3318,7 +3335,7 @@ function AppContent() {
                   {
                     backgroundColor: colors.card,
                     borderColor: colors.border,
-                    paddingBottom: safeAreaInsets.bottom,
+                    paddingBottom: drawerBottomInset,
                     transform: [{ translateY: itineraryTranslateY }],
                   },
                 ]}
@@ -3755,6 +3772,7 @@ const styles = StyleSheet.create({
   },
   legDetailsDismiss: { flex: 1 },
   legDetailsAnimatedSheet: { width: "100%", maxHeight: "72%", flexShrink: 1 },
+  legDetailsAnimatedSheetAndroid: { maxHeight: "88%" },
   legDetailsSheet: {
     maxHeight: "100%",
     borderTopLeftRadius: 28,
