@@ -83,6 +83,19 @@ const SUPPORT_BASE_URL =
 const SHARE_MAP_ASPECT = 1080 / 600;
 const COORDINATE_LOCATION_PATTERN = /^-?\d{1,3}(?:\.\d+)?\s*,\s*-?\d{1,3}(?:\.\d+)?$/;
 
+// Keep Android typography close to the designed iOS scale while still allowing
+// a modest accessibility increase from the device font-size setting.
+if (Platform.OS === "android") {
+  (Text as typeof Text & { defaultProps?: Record<string, unknown> }).defaultProps = {
+    ...(Text as typeof Text & { defaultProps?: Record<string, unknown> }).defaultProps,
+    maxFontSizeMultiplier: 1.1,
+  };
+  (TextInput as typeof TextInput & { defaultProps?: Record<string, unknown> }).defaultProps = {
+    ...(TextInput as typeof TextInput & { defaultProps?: Record<string, unknown> }).defaultProps,
+    maxFontSizeMultiplier: 1.1,
+  };
+}
+
 function displayLocation(value: string) {
   return COORDINATE_LOCATION_PATTERN.test(value.trim())
     ? "Your current location"
@@ -381,7 +394,7 @@ function RouteLegDetailsSheet({
 }) {
   const safeAreaInsets = useSafeAreaInsets();
   const bottomInset = Platform.OS === "android"
-    ? Math.max(safeAreaInsets.bottom, 28)
+    ? Math.max(safeAreaInsets.bottom, 48)
     : safeAreaInsets.bottom;
   const [switchingTo, setSwitchingTo] = useState<RouteLegMode | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -508,7 +521,10 @@ function RouteLegDetailsSheet({
             style={styles.legStepScroll}
             nestedScrollEnabled
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.legStepList}
+            contentContainerStyle={[
+              styles.legStepList,
+              { paddingBottom: bottomInset + 28 },
+            ]}
           >
             {leg.steps.map((step, stepIndex) => {
               const stepTransport = transportDetails(step.mode);
@@ -1524,7 +1540,7 @@ const ShareCard = forwardRef<
 function AppContent() {
   const safeAreaInsets = useSafeAreaInsets();
   const drawerBottomInset = Platform.OS === "android"
-    ? Math.max(safeAreaInsets.bottom, 28)
+    ? Math.max(safeAreaInsets.bottom, 48)
     : safeAreaInsets.bottom;
   const mapRef = useRef<MapView>(null);
   const plannerScrollRef = useRef<ScrollView>(null);
@@ -1537,6 +1553,7 @@ function AppContent() {
   const [infoOpen, setInfoOpen] = useState(false);
   const [infoSection, setInfoSection] = useState<string | null>("safety");
   const [itineraryOpen, setItineraryOpen] = useState(false);
+  const [itineraryLayoutVersion, setItineraryLayoutVersion] = useState(0);
   const [itineraryView, setItineraryView] = useState<"stops" | "transport">("stops");
   const [addStopPickerOpen, setAddStopPickerOpen] = useState(false);
   const [legDetailsFromItinerary, setLegDetailsFromItinerary] = useState(false);
@@ -3326,6 +3343,10 @@ function AppContent() {
           visible={itineraryOpen}
           transparent
           animationType="none"
+          onShow={() => {
+            setIsReordering(false);
+            setItineraryLayoutVersion((current) => current + 1);
+          }}
           onRequestClose={addStopPickerOpen ? () => setAddStopPickerOpen(false) : detailsFromItinerary ? closeItineraryPlace : closeItinerary}
         >
           <View style={[styles.modalOverlay, styles.bottomModalOverlay]}>
@@ -3598,6 +3619,7 @@ function AppContent() {
                         ]}
                       >
                         <ScrollView
+                          key={`${itineraryView}-${itineraryLayoutVersion}`}
                           style={styles.timelineScroll}
                           nestedScrollEnabled
                           removeClippedSubviews={false}
