@@ -427,6 +427,7 @@ function RouteLegDetailsSheet({
           edges={["left", "right"]}
           style={[
             styles.legDetailsSheet,
+            Platform.OS === "android" && styles.legDetailsSheetAndroid,
             { backgroundColor: colors.card, paddingBottom: bottomInset },
           ]}
         >
@@ -503,7 +504,12 @@ function RouteLegDetailsSheet({
               </Pressable>
             )}
           </View>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.legStepList}>
+          <ScrollView
+            style={styles.legStepScroll}
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.legStepList}
+          >
             {leg.steps.map((step, stepIndex) => {
               const stepTransport = transportDetails(step.mode);
               const stepColor = legColor(step.mode, colors.primary);
@@ -1667,6 +1673,7 @@ function AppContent() {
   );
 
   const openItinerary = () => {
+    setIsReordering(false);
     itineraryClosingRef.current = false;
     itineraryTranslateY.stopAnimation();
     itineraryTranslateY.setValue(0);
@@ -3592,7 +3599,7 @@ function AppContent() {
                       >
                         <ScrollView
                           style={styles.timelineScroll}
-                          scrollEnabled={!isReordering}
+                          nestedScrollEnabled
                           removeClippedSubviews={false}
                           showsVerticalScrollIndicator={false}
                           contentContainerStyle={styles.timeline}
@@ -3772,7 +3779,7 @@ const styles = StyleSheet.create({
   },
   legDetailsDismiss: { flex: 1 },
   legDetailsAnimatedSheet: { width: "100%", maxHeight: "72%", flexShrink: 1 },
-  legDetailsAnimatedSheetAndroid: { maxHeight: "88%" },
+  legDetailsAnimatedSheetAndroid: { height: "88%", maxHeight: "88%" },
   legDetailsSheet: {
     maxHeight: "100%",
     borderTopLeftRadius: 28,
@@ -3780,6 +3787,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 9,
   },
+  legDetailsSheetAndroid: { flex: 1 },
   legDetailsDragZone: { minHeight: 46, alignItems: "center", justifyContent: "center" },
   legDetailsHandle: {
     width: 48,
@@ -3835,7 +3843,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   refreshTransitText: { fontSize: 12, fontWeight: "800" },
-  legStepList: { gap: 8, paddingTop: 16, paddingBottom: 20 },
+  legStepScroll: { flex: 1, minHeight: 0 },
+  legStepList: { gap: 8, paddingTop: 16, paddingBottom: 28 },
   legStep: {
     borderWidth: 1,
     borderRadius: 16,
